@@ -21,8 +21,8 @@ async def seed_data():
     print("🌱 Starting data seeding via Supabase Client...")
     
     # 1. Get/Create User via Auth
-    unique_id = uuid.uuid4().hex[:8]
-    user_email = f"seed_bot_{unique_id}@quant101.com"
+    # unique_id = uuid.uuid4().hex[:8]
+    user_email = "seed_master@quant101.com"
     user_password = "Password123!"
     user_id = None
     
@@ -64,7 +64,7 @@ async def seed_data():
         print(f"⚠️ Could not sync to public users (might already exist or trigger handled): {e}")
 
     # 2. Create a Default Strategy
-    strategy_name = "AlphaSentient V4"
+    strategy_name = f"AlphaSentient V4 {uuid.uuid4().hex[:4]}"
     strategy_id = str(uuid.uuid4())
     
     try:

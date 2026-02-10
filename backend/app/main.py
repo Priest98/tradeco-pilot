@@ -1,0 +1,144 @@
+"""FastAPI Application Entry Point"""
+
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from contextlib import asynccontextmanager
+import logging
+import sys
+import asyncio
+from datetime import datetime
+
+from app.config import settings
+from app.api.v1.api import api_router
+from app.core.triggers.strategy_trigger import strategy_trigger_system
+from app.core.distribution.websocket_distributor import websocket_distributor
+from app.database import supabase_client
+
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, settings.LOG_LEVEL),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler('logs/app.log') if settings.ENVIRONMENT == "production" else logging.StreamHandler(),
+    ]
+)
+
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan events"""
+    # Startup
+    logger.info(f"Starting {settings.APP_NAME} v{settings.VERSION}")
+    logger.info(f"Environment: {settings.ENVIRONMENT}")
+    
+    try:
+        # Check database connection
+        if supabase_client.connected:
+            logger.info("✅ Database connection verified")
+        else:
+            logger.warning("⚠️ Database not connected - functionalities limited")
+        
+        # Start WebSocket Distributor
+        await websocket_distributor.start()
+        logger.info("✅ WebSocket Distributor started")
+        
+        # Start Strategy Trigger System (in background)
+        # We start it with some default symbols but it can be updated dynamically
+        asyncio.create_task(strategy_trigger_system.start(["BTCUSDT", "ETHUSDT", "EURUSD"]))
+        logger.info("✅ Strategy Trigger System started")
+
+        # Start Signal Lifecycle Manager
+        from app.core.signals.lifecycle import signal_lifecycle
+        asyncio.create_task(signal_lifecycle.start())
+        logger.info("✅ Signal Lifecycle Manager started")
+        
+        yield
+        
+    finally:
+        # Shutdown
+        logger.info("Shutting down application...")
+        await websocket_distributor.stop()
+        await strategy_trigger_system.stop()
+        logger.info("Shutdown complete")
+
+
+# Create FastAPI app
+app = FastAPI(
+    title=settings.APP_NAME,
+    version=settings.VERSION,
+    description="Institutional-grade quantitative trading signal platform",
+    lifespan=lifespan,
+    docs_url="/docs" if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
+)
+
+# CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all for now, restrict in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# Exception handlers
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Global exception handler"""
+    logger.error(f"Global exception: {exc}", exc_info=True)
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal server error" if not settings.DEBUG else str(exc),
+            "timestamp": datetime.utcnow().isoformat(),
+        }
+    )
+
+
+# Health check endpoint
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    return {
+        "status": "healthy",
+        "version": settings.VERSION,
+        "database": "connected" if supabase_client.connected else "disconnected",
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+
+
+@app.get("/")
+async def root():
+    """Root endpoint"""
+    return {
+        "name": settings.APP_NAME,
+        "version": settings.VERSION,
+        "docs": "/docs" if settings.DEBUG else "disabled",
+        "status": "operational",
+    }
+
+
+# Include API router
+app.include_router(api_router, prefix="/api/v1")
+
+# WebSocket endpoint for signals
+@app.websocket("/ws/signals/{client_id}")
+async def websocket_endpoint(websocket, client_id: str):
+    await websocket_distributor.connect(websocket, client_id)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    
+    uvicorn.run(
+        "app.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=settings.DEBUG,
+        log_level=settings.LOG_LEVEL.lower(),
+    )

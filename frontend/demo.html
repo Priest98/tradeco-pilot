@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TraderCopilot | Quant Signal Intelligence</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0A0A0F 0%, #111118 100%);
+            color: #F3F4F6;
+            min-height: 100vh;
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        /* Header */
+        header {
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            font-weight: bold;
+            background: linear-gradient(135deg, #8B5CF6 0%, #06B6D4 50%, #A78BFA 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: #9CA3AF;
+            font-size: 1rem;
+        }
+
+        .live-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        .pulse {
+            width: 8px;
+            height: 8px;
+            background: #10B981;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-label {
+            color: #9CA3AF;
+            font-size: 0.875rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 0.25rem;
+        }
+
+        .stat-suffix {
+            font-size: 1.25rem;
+            color: #9CA3AF;
+        }
+
+        /* Section Header */
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .section-header h2 {
+            font-size: 1.75rem;
+            font-weight: bold;
+        }
+
+        .accent-bar {
+            width: 4px;
+            height: 2rem;
+            background: linear-gradient(180deg, #8B5CF6 0%, #06B6D4 100%);
+            border-radius: 2px;
+        }
+
+        /* Signal Cards */
+        .signals-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .signal-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05));
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 1rem;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .signal-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 60px rgba(139, 92, 246, 0.2);
+        }
+
+        .signal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 1.5rem;
+        }
+
+        .signal-symbol {
+            font-size: 1.75rem;
+            font-weight: bold;
+            margin-bottom: 0.5rem;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.375rem;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border: 1px solid;
+        }
+
+        .badge-buy {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10B981;
+            border-color: rgba(16, 185, 129, 0.3);
+        }
+
+        .badge-sell {
+            background: rgba(239, 68, 68, 0.2);
+            color: #EF4444;
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        .badge-outline {
+            background: transparent;
+            color: #9CA3AF;
+            border-color: #374151;
+        }
+
+        /* Score Circle */
+        .score-circle {
+            width: 64px;
+            height: 64px;
+            position: relative;
+        }
+
+        .score-value {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+        }
+
+        .score-number {
+            font-size: 1.25rem;
+            font-weight: bold;
+            display: block;
+        }
+
+        .score-label {
+            font-size: 0.625rem;
+            color: #9CA3AF;
+        }
+
+        /* Price Boxes */
+        .prices-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .price-box {
+            background: rgba(17, 17, 24, 0.5);
+            border: 1px solid #374151;
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+        }
+
+        .price-label {
+            font-size: 0.625rem;
+            color: #9CA3AF;
+            text-transform: uppercase;
+            margin-bottom: 0.25rem;
+            letter-spacing: 0.05em;
+        }
+
+        .price-value {
+            font-size: 0.875rem;
+            font-weight: bold;
+        }
+
+        /* Metrics */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+        }
+
+        .metric-box {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(17, 17, 24, 0.3);
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+        }
+
+        .metric-label {
+            font-size: 0.625rem;
+            color: #9CA3AF;
+        }
+
+        .metric-value {
+            font-size: 0.875rem;
+            font-weight: 600;
+        }
+
+        /* Explanation */
+        .explanation {
+            background: rgba(17, 17, 24, 0.5);
+            border: 1px solid #374151;
+            border-radius: 0.5rem;
+            padding: 0.75rem;
+            margin-top: 1rem;
+        }
+
+        .explanation p {
+            font-size: 0.875rem;
+            color: #D1D5DB;
+            line-height: 1.5;
+        }
+
+        /* Colors */
+        .text-primary { color: #8B5CF6; }
+        .text-accent { color: #06B6D4; }
+        .text-success { color: #10B981; }
+        .text-danger { color: #EF4444; }
+        .text-warning { color: #F59E0B; }
+
+        /* Footer */
+        footer {
+            text-align: center;
+            margin-top: 4rem;
+            color: #6B7280;
+            font-size: 0.875rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <div style="display: flex; justify-content: space-between; align-items: start;">
+                <div>
+                    <h1>TraderCopilot</h1>
+                    <p class="subtitle">Institutional-grade quant signal intelligence</p>
+                </div>
+                <div class="live-badge">
+                    <span class="pulse"></span>
+                    <span>Live</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Stats -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <p class="stat-label">Active Signals</p>
+                <p class="stat-value text-primary">2</p>
+            </div>
+            <div class="stat-card">
+                <p class="stat-label">Avg Score</p>
+                <p class="stat-value text-accent">8.2<span class="stat-suffix">/10</span></p>
+            </div>
+            <div class="stat-card">
+                <p class="stat-label">Avg Probability</p>
+                <p class="stat-value text-success">72<span class="stat-suffix">%</span></p>
+            </div>
+            <div class="stat-card">
+                <p class="stat-label">Win Rate</p>
+                <p class="stat-value text-warning">68<span class="stat-suffix">%</span></p>
+            </div>
+        </div>
+
+        <!-- Section Header -->
+        <div class="section-header">
+            <span class="accent-bar"></span>
+            <h2>High-Quality Signals</h2>
+        </div>
+
+        <!-- Signals -->
+        <div class="signals-grid">
+            <!-- EURUSD Signal -->
+            <div class="signal-card">
+                <div class="signal-header">
+                    <div>
+                        <div class="signal-symbol">EURUSD</div>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <span class="badge badge-buy">▲ BUY</span>
+                            <span class="badge badge-outline">2m ago</span>
+                        </div>
+                    </div>
+                    <svg class="score-circle" viewBox="0 0 64 64">
+                        <circle cx="32" cy="32" r="28" fill="none" stroke="#374151" stroke-width="4"/>
+                        <circle cx="32" cy="32" r="28" fill="none" stroke="#10B981" stroke-width="4"
+                                stroke-dasharray="176" stroke-dashoffset="20" 
+                                transform="rotate(-90 32 32)" stroke-linecap="round"/>
+                        <text x="32" y="28" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold">8.6</text>
+                        <text x="32" y="38" text-anchor="middle" fill="#9CA3AF" font-size="8">SCORE</text>
+                    </svg>
+                </div>
+
+                <div class="prices-grid">
+                    <div class="price-box">
+                        <div class="price-label">Entry</div>
+                        <div class="price-value text-primary">1.08520</div>
+                    </div>
+                    <div class="price-box">
+                        <div class="price-label">Stop Loss</div>
+                        <div class="price-value text-danger">1.08380</div>
+                    </div>
+                    <div class="price-box">
+                        <div class="price-label">Take Profit</div>
+                        <div class="price-value text-success">1.08890</div>
+                    </div>
+                </div>
+
+                <div class="metrics-grid">
+                    <div class="metric-box">
+                        <div>⚡</div>
+                        <div>
+                            <div class="metric-label">Probability</div>
+                            <div class="metric-value text-accent">72.5%</div>
+                        </div>
+                    </div>
+                    <div class="metric-box">
+                        <div>🎯</div>
+                        <div>
+                            <div class="metric-label">R:R Ratio</div>
+                            <div class="metric-value text-warning">1:2.6</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
+                    <span class="badge" style="background: rgba(16, 185, 129, 0.2); color: #10B981; border-color: rgba(16, 185, 129, 0.3);">High Confidence</span>
+                    <span class="badge badge-outline">Medium Risk</span>
+                    <span class="badge badge-outline">2.5% Size</span>
+                </div>
+
+                <div class="explanation">
+                    <p>Strong confluence of liquidity sweep at support level with fair value gap. Historical data shows 75% win rate in similar London session setups. Current trending regime favors breakout entries.</p>
+                </div>
+            </div>
+
+            <!-- BTCUSD Signal -->
+            <div class="signal-card">
+                <div class="signal-header">
+                    <div>
+                        <div class="signal-symbol">BTCUSD</div>
+                        <div style="display: flex; gap: 0.5rem; margin-bottom: 0.5rem;">
+                            <span class="badge badge-sell">▼ SELL</span>
+                            <span class="badge badge-outline">15m ago</span>
+                        </div>
+                    </div>
+                    <svg class="score-circle" viewBox="0 0 64 64">
+                        <circle cx="32" cy="32" r="28" fill="none" stroke="#374151" stroke-width="4"/>
+                        <circle cx="32" cy="32" r="28" fill="none" stroke="#F59E0B" stroke-width="4"
+                                stroke-dasharray="176" stroke-dashoffset="35" 
+                                transform="rotate(-90 32 32)" stroke-linecap="round"/>
+                        <text x="32" y="28" text-anchor="middle" fill="#fff" font-size="14" font-weight="bold">7.8</text>
+                        <text x="32" y="38" text-anchor="middle" fill="#9CA3AF" font-size="8">SCORE</text>
+                    </svg>
+                </div>
+
+                <div class="prices-grid">
+                    <div class="price-box">
+                        <div class="price-label">Entry</div>
+                        <div class="price-value text-primary">42850.00</div>
+                    </div>
+                    <div class="price-box">
+                        <div class="price-label">Stop Loss</div>
+                        <div class="price-value text-danger">43150.00</div>
+                    </div>
+                    <div class="price-box">
+                        <div class="price-label">Take Profit</div>
+                        <div class="price-value text-success">41950.00</div>
+                    </div>
+                </div>
+
+                <div class="metrics-grid">
+                    <div class="metric-box">
+                        <div>⚡</div>
+                        <div>
+                            <div class="metric-label">Probability</div>
+                            <div class="metric-value text-accent">68.0%</div>
+                        </div>
+                    </div>
+                    <div class="metric-box">
+                        <div>🎯</div>
+                        <div>
+                            <div class="metric-label">R:R Ratio</div>
+                            <div class="metric-value text-warning">1:3.0</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.75rem;">
+                    <span class="badge" style="background: rgba(245, 158, 11, 0.2); color: #F59E0B; border-color: rgba(245, 158, 11, 0.3);">Medium Confidence</span>
+                    <span class="badge badge-outline">Low Risk</span>
+                    <span class="badge badge-outline">2.0% Size</span>
+                </div>
+
+                <div class="explanation">
+                    <p>Resistance level rejection with bearish order block formation. Monte Carlo simulation shows 68% probability of profit. Strategy performs well in current volatility conditions.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p>TraderCopilot v0.1.0 | Powered by Gemini AI & Statistical Analysis</p>
+        </footer>
+    </div>
+</body>
+</html>

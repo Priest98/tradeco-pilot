@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # Python Backend
+  backend:
+    build: ./backend
+    container_name: tradercopilot-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://postgres:${DB_PASSWORD:-password}@db:5432/tradercopilot
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - ENVIRONMENT=production
+    depends_on:
+      - db
+    networks:
+      - trader-network
+    restart: always
+
+  # Next.js Frontend
+  frontend:
+    build: ./frontend
+    container_name: tradercopilot-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    depends_on:
+      - backend
+    networks:
+      - trader-network
+    restart: always
+
+  # TimescaleDB (PostgreSQL)
+  db:
+    image: timescale/timescaledb:latest-pg15
+    container_name: tradercopilot-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-password}
+      - POSTGRES_DB=tradercopilot
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - trader-network
+    restart: always
+
+networks:
+  trader-network:
+    driver: bridge
+
+volumes:
+  postgres_data:

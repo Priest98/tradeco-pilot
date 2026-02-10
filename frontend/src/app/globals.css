@@ -1,0 +1,61 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-slate-200;
+  }
+
+  body {
+    @apply bg-white text-slate-800 font-body;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-heading font-semibold tracking-tight;
+  }
+
+  code,
+  pre {
+    @apply font-mono;
+  }
+}
+
+@layer components {
+  /* ... existing component classes ... */
+
+  /* Interaction Utilities */
+  .hover-scale {
+    @apply transition-transform duration-300 ease-smooth hover:scale-[1.02];
+  }
+
+  .hover-lift {
+    @apply transition-all duration-300 ease-smooth hover:-translate-y-0.5 hover:shadow-xl;
+  }
+
+  .hover-glow {
+    @apply transition-shadow duration-300 ease-smooth hover:shadow-lg hover:shadow-indigo-500/20 dark:hover:shadow-indigo-400/20;
+  }
+
+  /* Components using interactions */
+  .glass {
+    @apply bg-white/70 dark:bg-slate-900/70 backdrop-blur-lg border border-white/20 dark:border-slate-800 shadow-lg;
+  }
+
+  .card {
+    @apply bg-white dark:bg-slate-900 rounded-xl p-6 shadow-xl border border-slate-100 dark:border-slate-800 hover-scale hover-lift;
+  }
+
+  .btn-primary {
+    @apply bg-gradient-to-r from-primary to-primary-dark hover:from-primary-dark hover:to-primary text-white font-semibold py-2 px-6 rounded-lg transition-all duration-300 shadow-lg hover:shadow-primary/50 hover:scale-[1.02] active:scale-95;
+  }
+
+  .btn-accent {
+    @apply bg-gradient-to-r from-accent to-accent-dark hover:from-accent-dark hover:to-accent text-white font-semibold py-2 px-6 rounded-lg transition-all duration-300;
+  }
+}

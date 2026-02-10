@@ -24,8 +24,8 @@ pandas==2.1.4
 scipy==1.11.4
 
 # Quantitative Finance
-vectorbt==0.26.0
-ta-lib==0.4.28
+# vectorbt==0.26.0
+# ta-lib==0.4.28
 backtrader==1.9.78.123
 
 # Google Gemini AI

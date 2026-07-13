@@ -1,0 +1,81 @@
+@import url('https://fonts.googleapis.com/css2?family=Bodoni+Moda:ital,opsz,wght@0,6..96,400..900;1,6..96,400..900&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 40 28% 93%;
+    --foreground: 90 33% 4%;
+    --card: 40 28% 93%;
+    --card-foreground: 90 33% 4%;
+    --popover: 40 28% 93%;
+    --popover-foreground: 90 33% 4%;
+    --primary: 162 67% 14%;
+    --primary-foreground: 40 28% 93%;
+    --secondary: 40 12% 85%;
+    --secondary-foreground: 90 33% 4%;
+    --muted: 40 12% 85%;
+    --muted-foreground: 75 7% 41%;
+    --accent: 28 38% 56%;
+    --accent-foreground: 90 33% 4%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 40 12% 80%;
+    --input: 40 12% 80%;
+    --ring: 28 38% 56%;
+    --radius: 0.625rem;
+
+    /* Brand Colors */
+    --parchment: #F4EFE6;
+    --forest: #0B3A2E;
+    --copper: #B88A66;
+    --text-primary: #0C0F0A;
+    --text-secondary: #6B6F63;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    scroll-behavior: auto;
+  }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--parchment);
+    color: var(--text-primary);
+    overflow-x: hidden;
+  }
+
+  h1, h2, h3, h4, h5, h6, .font-display {
+    font-family: 'Bodoni Moda', serif;
+  }
+
+  .font-mono {
+    font-family: 'IBM Plex Mono', monospace;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .grain-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.06;
+    mix-blend-mode: multiply;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  }
+}

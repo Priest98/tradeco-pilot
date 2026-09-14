@@ -12,6 +12,9 @@ out/
 build/
 dist/
 
+# Heavy static vendor runtime (served offline locally or loaded from CDN in cloud)
+public/cesium/
+
 # SQLite databases & temp files
 *.db
 *.db-journal

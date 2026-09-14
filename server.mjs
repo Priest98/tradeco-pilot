@@ -69,8 +69,8 @@ const WORKSTATION_HTML = `<!DOCTYPE html>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>TradeCo-Pilot | Personal Global Intelligence System</title>
-  <script src="/cesium/Cesium.js"></script>
-  <link rel="stylesheet" href="/cesium/Widgets/widgets.css">
+  <script src="/cesium/Cesium.js" onerror="this.onerror=null;this.src='https://cesium.com/downloads/cesiumjs/releases/1.120/Build/Cesium/Cesium.js'"></script>
+  <link rel="stylesheet" href="/cesium/Widgets/widgets.css" onerror="this.onerror=null;this.href='https://cesium.com/downloads/cesiumjs/releases/1.120/Build/Cesium/Widgets/widgets.css'">
   <script src="https://cdn.tailwindcss.com"></script>
   <style>
     :root {

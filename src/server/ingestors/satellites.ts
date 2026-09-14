@@ -41,6 +41,7 @@ export function propagateSatellite(
   try {
     const satrec = satellite.twoline2satrec(line1, line2);
     const positionAndVelocity = satellite.propagate(satrec, date);
+    if (!positionAndVelocity) return null;
 
     const positionEci = positionAndVelocity.position;
     const velocityEci = positionAndVelocity.velocity;

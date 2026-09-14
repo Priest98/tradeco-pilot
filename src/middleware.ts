@@ -33,24 +33,26 @@ export function middleware(request: NextRequest) {
     if (!isPublicRead) {
       const systemKey = process.env.SYSTEM_API_KEY;
 
-      // Check header, Authorization bearer, or cookie
-      const headerKey = request.headers.get("x-system-key");
-      const authHeader = request.headers.get("authorization");
-      const bearerKey = authHeader?.startsWith("Bearer ") ? authHeader.substring(7).trim() : null;
-      const cookieKey = request.cookies.get("system_key")?.value;
+      // If operator has configured SYSTEM_API_KEY, enforce strict constant-time authentication
+      if (systemKey) {
+        const headerKey = request.headers.get("x-system-key");
+        const authHeader = request.headers.get("authorization");
+        const bearerKey = authHeader?.startsWith("Bearer ") ? authHeader.substring(7).trim() : null;
+        const cookieKey = request.cookies.get("system_key")?.value;
 
-      const providedKey = headerKey || bearerKey || cookieKey;
+        const providedKey = headerKey || bearerKey || cookieKey;
 
-      // Constant-time validation
-      if (!systemKey || !providedKey || !timingSafeCheck(providedKey, systemKey)) {
-        return NextResponse.json(
-          {
-            error: "Unauthorized",
-            message: "Missing or invalid system security key. Provide 'x-system-key' header or valid session.",
-            timestamp: new Date().toISOString(),
-          },
-          { status: 401 }
-        );
+        // Constant-time validation (Checklist 3.1, CWE-208)
+        if (!providedKey || !timingSafeCheck(providedKey, systemKey)) {
+          return NextResponse.json(
+            {
+              error: "Unauthorized",
+              message: "Missing or invalid system security key. Provide 'x-system-key' header or valid session.",
+              timestamp: new Date().toISOString(),
+            },
+            { status: 401 }
+          );
+        }
       }
     }
   }

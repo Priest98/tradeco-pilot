@@ -64,28 +64,23 @@ export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({ onSelectEntity }) => {
           shouldAnimate: true,
         });
 
-        // Add High-Resolution Tactical Satellite Imagery (ESRI World Imagery)
+        // Disable Cesium modal error popup on render frame
+        viewer.showRenderLoopErrors = false;
+
+        // Dark Tactical Imagery via pure URL template (100% synchronous, zero metadata endpoints)
         try {
-          const esriProvider = new Cesium.ArcGisMapServerImageryProvider({
-            url: "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer",
-            enablePickFeatures: false,
+          const tileProvider = new Cesium.UrlTemplateImageryProvider({
+            url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+            maximumLevel: 19,
+            credit: "OpenStreetMap Tactical",
           });
-          const esriLayer = viewer.imageryLayers.addImageryProvider(esriProvider);
-          esriLayer.brightness = 0.85;
-          esriLayer.contrast = 1.2;
-        } catch (e) {
-          console.warn("ESRI imagery load error, attempting OSM fallback:", e);
-          try {
-            const osmProvider = new Cesium.OpenStreetMapImageryProvider({
-              url: "https://tile.openstreetmap.org/",
-            });
-            const osmLayer = viewer.imageryLayers.addImageryProvider(osmProvider);
-            osmLayer.brightness = 0.55;
-            osmLayer.contrast = 1.3;
-            osmLayer.saturation = 0.2;
-          } catch (osmErr) {
-            console.warn("OSM fallback failed:", osmErr);
-          }
+          const tileLayer = viewer.imageryLayers.addImageryProvider(tileProvider);
+          // Tactical dark styling: desaturate and dim to make tactical telemetry pop
+          tileLayer.brightness = 0.55;
+          tileLayer.contrast = 1.35;
+          tileLayer.saturation = 0.2;
+        } catch (err) {
+          console.warn("Tactical tile provider error:", err);
         }
 
         // Tactical space styling

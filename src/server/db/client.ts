@@ -52,6 +52,14 @@ export function getDatabase(): DatabaseSync {
       insertObs.run("obs-jam-1", "gpsjam", "gpsjam.org", "842cb8bffffffff", 26.2, 56.2, 0, now, JSON.stringify({ hex: "842cb8bffffffff", jammingRatio: 0.68, severity: "high" }));
       insertObs.run("obs-ship-1", "maritime", "aisstream", "tanker-01", 26.15, 56.3, 0, now, JSON.stringify({ name: "PACIFIC VOYAGER", type: "VLCC Crude Carrier", speedKnots: 11.2 }));
 
+      // Seed core macro tickers and prediction contracts
+      insertObs.run("obs-mkt-1", "market", "yahoo_finance", "CL=F", 0, 0, 0, now, JSON.stringify({ symbol: "CL=F", name: "Crude Oil (WTI)", price: 78.45, changePct: 3.22, category: "commodity" }));
+      insertObs.run("obs-mkt-2", "market", "yahoo_finance", "BZ=F", 0, 0, 0, now, JSON.stringify({ symbol: "BZ=F", name: "Brent Crude", price: 82.10, changePct: 3.58, category: "commodity" }));
+      insertObs.run("obs-mkt-3", "market", "yahoo_finance", "GC=F", 0, 0, 0, now, JSON.stringify({ symbol: "GC=F", name: "Gold Futures", price: 2648.50, changePct: 1.42, category: "commodity" }));
+      insertObs.run("obs-mkt-4", "market", "yahoo_finance", "LMT", 0, 0, 0, now, JSON.stringify({ symbol: "LMT", name: "Lockheed Martin", price: 472.30, changePct: 2.15, category: "defense" }));
+      insertObs.run("obs-mkt-5", "market", "polymarket", "poly-101", 0, 0, 0, now, JSON.stringify({ title: "Strait of Hormuz commercial shipping transit drop >20%?", yesProbability: 0.72 }));
+      insertObs.run("obs-mkt-6", "market", "polymarket", "poly-102", 0, 0, 0, now, JSON.stringify({ title: "Middle East military conflict escalation in next 30 days?", yesProbability: 0.68 }));
+
       const insertAnom = db.prepare(`
         INSERT INTO anomalies (id, timestamp, domain, anomaly_type, z_score, confidence, lat, lon, summary, evidence_json, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

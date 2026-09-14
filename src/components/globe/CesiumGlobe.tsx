@@ -49,7 +49,15 @@ export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({ onSelectEntity }) => {
 
         if (!isMounted || !containerRef.current) return;
 
+        // Dark Tactical CartoDB Matter Imagery Provider
+        const imageryProvider = new Cesium.UrlTemplateImageryProvider({
+          url: "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+          maximumLevel: 18,
+          credit: "CartoDB Dark Matter",
+        });
+
         viewer = new Cesium.Viewer(containerRef.current, {
+          imageryProvider,
           animation: false,
           baseLayerPicker: false,
           fullscreenButton: false,
@@ -69,10 +77,10 @@ export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({ onSelectEntity }) => {
           viewer.scene.skyAtmosphere.show = true;
         }
 
-        // Initial camera positioning: global overview
+        // Initial camera positioning: Focus on active tactical theater (Strait of Hormuz)
         viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(25.0, 30.0, 18000000.0),
-          duration: 0,
+          destination: Cesium.Cartesian3.fromDegrees(56.25, 26.55, 3800000.0),
+          duration: 1.5,
         });
 
         viewerRef.current = viewer;

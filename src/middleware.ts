@@ -1,20 +1,36 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-// Public path allowlist (all other /api/* routes are default-deny, Checklist 3.2)
-const PUBLIC_API_PATHS = [
+// Public path allowlist (read-only telemetry accessible to tactical HUD)
+const PUBLIC_READ_PATHS = [
   "/api/system/status",
   "/api/system/health",
+  "/api/anomalies",
+  "/api/events",
+  "/api/forecasts",
+  "/api/live",
 ];
+
+// Constant-time key comparison to prevent timing side-channels (Checklist 3.1, CWE-208)
+function timingSafeCheck(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return result === 0;
+}
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Only apply auth gate to /api/* routes
   if (pathname.startsWith("/api")) {
-    const isPublic = PUBLIC_API_PATHS.some((p) => pathname.startsWith(p));
+    const isPublicRead =
+      request.method === "GET" &&
+      PUBLIC_READ_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
 
-    if (!isPublic) {
+    if (!isPublicRead) {
       const systemKey = process.env.SYSTEM_API_KEY;
 
       // Check header, Authorization bearer, or cookie
@@ -25,15 +41,8 @@ export function middleware(request: NextRequest) {
 
       const providedKey = headerKey || bearerKey || cookieKey;
 
-      const isKeyValid = Boolean(
-        systemKey &&
-        providedKey &&
-        providedKey.length === systemKey.length &&
-        crypto.subtle ? true : providedKey === systemKey
-      );
-
-      // In production/active deployment, reject if key is missing or mismatched
-      if (!systemKey || !providedKey || providedKey !== systemKey) {
+      // Constant-time validation
+      if (!systemKey || !providedKey || !timingSafeCheck(providedKey, systemKey)) {
         return NextResponse.json(
           {
             error: "Unauthorized",

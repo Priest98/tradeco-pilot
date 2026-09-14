@@ -1,0 +1,11 @@
+﻿node_modules
+.next
+gods_eye_repo
+osiris_repo
+mide
+public/cesium
+data
+*.db
+*.db-wal
+*.db-shm
+.git

@@ -36,45 +36,50 @@ export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({ onSelectEntity }) => {
     async function initCesium() {
       if (typeof window === "undefined" || !containerRef.current) return;
 
-      // Set Cesium base URL to locally served static assets (offline-capable)
+      const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
       // @ts-expect-error window global
-      window.CESIUM_BASE_URL = "/cesium";
+      window.CESIUM_BASE_URL = isLocal ? "/cesium" : "https://cesium.com/downloads/cesiumjs/releases/1.120/Build/Cesium/";
 
-      const Cesium = await import("cesium");
+      try {
+        // @ts-expect-error window global
+        const Cesium = window.Cesium || (await import("cesium"));
 
-      // Set empty Ion token to prevent external credential warnings
-      Cesium.Ion.defaultAccessToken = "";
+        // Set empty Ion token to prevent external credential warnings
+        Cesium.Ion.defaultAccessToken = "";
 
-      if (!isMounted || !containerRef.current) return;
+        if (!isMounted || !containerRef.current) return;
 
-      viewer = new Cesium.Viewer(containerRef.current, {
-        animation: false,
-        baseLayerPicker: false,
-        fullscreenButton: false,
-        geocoder: false,
-        homeButton: false,
-        infoBox: false,
-        sceneModePicker: false,
-        selectionIndicator: false,
-        timeline: false,
-        navigationHelpButton: false,
-        shouldAnimate: true,
-      });
+        viewer = new Cesium.Viewer(containerRef.current, {
+          animation: false,
+          baseLayerPicker: false,
+          fullscreenButton: false,
+          geocoder: false,
+          homeButton: false,
+          infoBox: false,
+          sceneModePicker: false,
+          selectionIndicator: false,
+          timeline: false,
+          navigationHelpButton: false,
+          shouldAnimate: true,
+        });
 
-      // Dark tactical space styling
-      viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#06090e");
-      if (viewer.scene.skyAtmosphere) {
-        viewer.scene.skyAtmosphere.show = true;
+        // Dark tactical space styling
+        viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#06090e");
+        if (viewer.scene.skyAtmosphere) {
+          viewer.scene.skyAtmosphere.show = true;
+        }
+
+        // Initial camera positioning: global overview
+        viewer.camera.flyTo({
+          destination: Cesium.Cartesian3.fromDegrees(25.0, 30.0, 18000000.0),
+          duration: 0,
+        });
+
+        viewerRef.current = viewer;
+        setCesiumReady(true);
+      } catch (err) {
+        console.warn("Cesium WebGL initialization error:", err);
       }
-
-      // Initial camera positioning: global overview
-      viewer.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(25.0, 30.0, 18000000.0),
-        duration: 0,
-      });
-
-      viewerRef.current = viewer;
-      setCesiumReady(true);
     }
 
     initCesium();

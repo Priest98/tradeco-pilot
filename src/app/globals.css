@@ -72,3 +72,8 @@
 .animate-radar-pulse {
   animation: radar-pulse 2s infinite;
 }
+
+/* Hide default Cesium bottom widget to prevent HUD overlap */
+.cesium-viewer-bottom {
+  display: none !important;
+}

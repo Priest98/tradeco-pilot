@@ -49,16 +49,8 @@ export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({ onSelectEntity }) => {
 
         if (!isMounted || !containerRef.current) return;
 
-        // Dark Tactical CartoDB Matter Imagery Provider with subdomains
-        const imageryProvider = new Cesium.UrlTemplateImageryProvider({
-          url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-          subdomains: ["a", "b", "c", "d"],
-          maximumLevel: 19,
-          credit: "CartoDB Dark Matter",
-        });
-
         viewer = new Cesium.Viewer(containerRef.current, {
-          imageryProvider,
+          baseLayer: false, // Prevents Cesium Ion default imagery attempt
           animation: false,
           baseLayerPicker: false,
           fullscreenButton: false,
@@ -72,17 +64,46 @@ export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({ onSelectEntity }) => {
           shouldAnimate: true,
         });
 
-        // Set globe base color to tactical space dark (replaces default cobalt blue)
+        // Add High-Resolution Tactical Satellite Imagery (ESRI World Imagery)
+        try {
+          const esriProvider = new Cesium.ArcGisMapServerImageryProvider({
+            url: "https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer",
+            enablePickFeatures: false,
+          });
+          const esriLayer = viewer.imageryLayers.addImageryProvider(esriProvider);
+          esriLayer.brightness = 0.85;
+          esriLayer.contrast = 1.2;
+        } catch (e) {
+          console.warn("ESRI imagery load error, attempting OSM fallback:", e);
+          try {
+            const osmProvider = new Cesium.OpenStreetMapImageryProvider({
+              url: "https://tile.openstreetmap.org/",
+            });
+            const osmLayer = viewer.imageryLayers.addImageryProvider(osmProvider);
+            osmLayer.brightness = 0.55;
+            osmLayer.contrast = 1.3;
+            osmLayer.saturation = 0.2;
+          } catch (osmErr) {
+            console.warn("OSM fallback failed:", osmErr);
+          }
+        }
+
+        // Tactical space styling
         viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#06090e");
         viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#06090e");
         if (viewer.scene.skyAtmosphere) {
           viewer.scene.skyAtmosphere.show = true;
         }
 
-        // Initial camera positioning: Focus on active tactical theater (Strait of Hormuz)
+        // Hide default Cesium credit container
+        if (viewer.cesiumWidget?.creditContainer) {
+          viewer.cesiumWidget.creditContainer.style.display = "none";
+        }
+
+        // Camera focus: Strait of Hormuz tactical theater
         viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(56.25, 26.55, 1200000.0),
-          duration: 2.0,
+          destination: Cesium.Cartesian3.fromDegrees(56.25, 26.55, 1400000.0),
+          duration: 1.5,
         });
 
         viewerRef.current = viewer;

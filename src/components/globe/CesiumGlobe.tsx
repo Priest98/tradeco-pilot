@@ -49,10 +49,11 @@ export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({ onSelectEntity }) => {
 
         if (!isMounted || !containerRef.current) return;
 
-        // Dark Tactical CartoDB Matter Imagery Provider
+        // Dark Tactical CartoDB Matter Imagery Provider with subdomains
         const imageryProvider = new Cesium.UrlTemplateImageryProvider({
-          url: "https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-          maximumLevel: 18,
+          url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
+          subdomains: ["a", "b", "c", "d"],
+          maximumLevel: 19,
           credit: "CartoDB Dark Matter",
         });
 
@@ -71,7 +72,8 @@ export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({ onSelectEntity }) => {
           shouldAnimate: true,
         });
 
-        // Dark tactical space styling
+        // Set globe base color to tactical space dark (replaces default cobalt blue)
+        viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#06090e");
         viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#06090e");
         if (viewer.scene.skyAtmosphere) {
           viewer.scene.skyAtmosphere.show = true;
@@ -79,8 +81,8 @@ export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({ onSelectEntity }) => {
 
         // Initial camera positioning: Focus on active tactical theater (Strait of Hormuz)
         viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(56.25, 26.55, 3800000.0),
-          duration: 1.5,
+          destination: Cesium.Cartesian3.fromDegrees(56.25, 26.55, 1200000.0),
+          duration: 2.0,
         });
 
         viewerRef.current = viewer;
@@ -108,7 +110,8 @@ export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({ onSelectEntity }) => {
 
     async function updateGlobeEntities() {
       try {
-        const Cesium = await import("cesium");
+        // @ts-expect-error window global
+        const Cesium = (typeof window !== "undefined" && window.Cesium) ? window.Cesium : await import("cesium");
         const viewer = viewerRef.current;
         if (!viewer || viewer.isDestroyed()) return;
 
@@ -142,15 +145,23 @@ export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({ onSelectEntity }) => {
               if (!entity) {
                 viewer.entities.add({
                   id: entityId,
-                  name: f.data.callsign || f.entityId,
+                  name: f.data?.callsign || f.entityId,
                   position,
                   point: {
-                    pixelSize: isMil || isEmerg ? 7 : 5,
+                    pixelSize: isMil || isEmerg ? 8 : 6,
                     color,
                     outlineColor: Cesium.Color.BLACK,
                     outlineWidth: 1,
                   },
-                  description: `${f.data.callsign} (${f.data.typeCode || "Flight"})\nSpeed: ${f.data.speedKnots} kts\nAlt: ${f.alt} m`,
+                  label: {
+                    text: f.data?.callsign || f.entityId,
+                    font: "10px monospace",
+                    fillColor: color,
+                    pixelOffset: new Cesium.Cartesian2(0, -12),
+                    showBackground: true,
+                    backgroundColor: Cesium.Color.BLACK.withAlpha(0.7),
+                  },
+                  description: `${f.data?.callsign || f.entityId} (${f.data?.type || "Aircraft"})\nAlt: ${f.alt} m`,
                 });
               } else {
                 entity.position = position;
@@ -181,13 +192,21 @@ export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({ onSelectEntity }) => {
               if (!entity) {
                 viewer.entities.add({
                   id: entityId,
-                  name: v.data.name || v.entityId,
+                  name: v.data?.name || v.entityId,
                   position,
                   point: {
-                    pixelSize: isChokepoint ? 9 : 5,
+                    pixelSize: isChokepoint ? 9 : 6,
                     color,
                     outlineColor: Cesium.Color.BLACK,
                     outlineWidth: 1,
+                  },
+                  label: {
+                    text: v.data?.name || v.entityId,
+                    font: "10px monospace",
+                    fillColor: color,
+                    pixelOffset: new Cesium.Cartesian2(0, 12),
+                    showBackground: true,
+                    backgroundColor: Cesium.Color.BLACK.withAlpha(0.7),
                   },
                 });
               }
@@ -205,21 +224,30 @@ export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({ onSelectEntity }) => {
 
             for (const h of hexes.slice(0, 150)) {
               if (h.lat === undefined || h.lon === undefined) continue;
-              const entityId = `jam-${h.data.hex}`;
+              const entityId = `jam-${h.data?.hex || h.id}`;
               if (!viewer.entities.getById(entityId)) {
-                const isHigh = h.data.severity === "high";
+                const isHigh = h.data?.severity === "high";
                 viewer.entities.add({
                   id: entityId,
-                  name: `GPS Jamming Hex ${h.data.hex}`,
+                  name: `GPS Jamming Hex ${h.data?.hex || h.id}`,
                   position: Cesium.Cartesian3.fromDegrees(h.lon, h.lat, 0),
                   ellipse: {
-                    semiMinorAxis: 25000.0,
-                    semiMajorAxis: 25000.0,
+                    semiMinorAxis: 35000.0,
+                    semiMajorAxis: 35000.0,
                     material: isHigh
-                      ? Cesium.Color.RED.withAlpha(0.35)
-                      : Cesium.Color.YELLOW.withAlpha(0.25),
+                      ? Cesium.Color.RED.withAlpha(0.4)
+                      : Cesium.Color.YELLOW.withAlpha(0.3),
                     outline: true,
                     outlineColor: isHigh ? Cesium.Color.RED : Cesium.Color.YELLOW,
+                    outlineWidth: 2,
+                  },
+                  label: {
+                    text: `EW SPOOF ${(h.data?.jammingRatio * 100).toFixed(0)}%`,
+                    font: "10px monospace",
+                    fillColor: Cesium.Color.YELLOW,
+                    pixelOffset: new Cesium.Cartesian2(0, -10),
+                    showBackground: true,
+                    backgroundColor: Cesium.Color.BLACK.withAlpha(0.7),
                   },
                 });
               }

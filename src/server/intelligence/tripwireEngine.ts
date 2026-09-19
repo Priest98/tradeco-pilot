@@ -1,3 +1,4 @@
+import type { DatabaseSync } from "node:sqlite";
 import { getDatabase } from "../db/client.ts";
 import { isPointInPolygon, Point2D } from "../../lib/geoUtils.ts";
 import { NormalizedObservation } from "../ingestors/base.ts";
@@ -23,7 +24,7 @@ export interface TripwireAlert {
   lat: number;
   lon: number;
   timestamp: number;
-  details: Record<string, any>;
+  details: Record<string, unknown>;
 }
 
 // Strategic pre-seeded Areas of Interest (AOIs)
@@ -86,9 +87,9 @@ export class TripwireEngine {
   private activeZones: Map<string, TripwireZone> = new Map();
   private entityZoneState: Map<string, Set<string>> = new Map(); // entityId -> Set<tripwireId>
 
-  private db: any = null;
+  private db: DatabaseSync | null = null;
 
-  constructor(customDb?: any) {
+  constructor(customDb?: DatabaseSync) {
     if (customDb) {
       this.db = customDb;
     }
@@ -101,7 +102,7 @@ export class TripwireEngine {
   syncFromDatabase(): void {
     try {
       const db = this.db || getDatabase();
-      const rows = db.prepare("SELECT * FROM aoi_tripwires").all() as any[];
+      const rows = db.prepare("SELECT * FROM aoi_tripwires").all() as Array<{id:string;name:string;geometry_geojson:string;filter_domain:string;alert_on_entry:number;alert_on_exit:number;created_at:number}>;
 
       if (rows.length === 0) {
         // Seed strategic default zones
@@ -223,7 +224,7 @@ export class TripwireEngine {
             tripwireName: zone.name,
             entityId,
             domain: obs.domain,
-            callsignOrName: obs.data?.callsign || obs.data?.name || entityId,
+            callsignOrName: String(obs.data?.callsign || obs.data?.name || entityId),
             eventType: "ENTRY",
             lat: obs.lat,
             lon: obs.lon,
@@ -243,7 +244,7 @@ export class TripwireEngine {
             tripwireName: zone.name,
             entityId,
             domain: obs.domain,
-            callsignOrName: obs.data?.callsign || obs.data?.name || entityId,
+            callsignOrName: String(obs.data?.callsign || obs.data?.name || entityId),
             eventType: "EXIT",
             lat: obs.lat,
             lon: obs.lon,

@@ -1,3 +1,8 @@
+import { validateHost } from "../security/ssrfGuard";
+import { isIP } from "node:net";
+import { z } from "zod";
+const positionSchema = z.object({Latitude:z.number().min(-90).max(90).optional(),Longitude:z.number().min(-180).max(180).optional(),Sog:z.number().optional(),Cog:z.number().optional()});
+const aisSchema = z.object({MetaData:z.object({MMSI:z.number().int().positive(),ShipName:z.string().optional(),latitude:z.number().min(-90).max(90).optional(),longitude:z.number().min(-180).max(180).optional(),flag:z.string().optional()}),MessageType:z.string(),Message:z.object({PositionReport:positionSchema.optional(),StandardClassBPositionReport:positionSchema.optional()}).optional()});
 import { BaseIngestor, NormalizedObservation } from "./base";
 import { getEnv } from "@/config/env";
 import WebSocket from "ws";
@@ -83,16 +88,19 @@ export class MaritimeIngestor extends BaseIngestor {
 
   constructor() {
     super();
-    this.initWebSocketClient();
+
   }
 
-  private initWebSocketClient(): void {
+  private async initWebSocketClient(): Promise<void> {
     const env = getEnv();
     if (!env.AISSTREAM_API_KEY || wsClient || wsConnecting) return;
 
     wsConnecting = true;
     try {
-      const ws = new WebSocket("wss://stream.aisstream.io/v0/stream");
+      const check=await validateHost("stream.aisstream.io");
+      if(!check.ok || !check.resolved?.[0]) throw new Error("AIS host validation failed");
+      const address=check.resolved[0];
+      const ws = new WebSocket("wss://stream.aisstream.io/v0/stream", {handshakeTimeout:10000,maxPayload:1048576,family:isIP(address),lookup:(_host,_options,callback)=>callback(null,address,isIP(address))});
 
       ws.on("open", () => {
         console.log("[MaritimeIngestor] Connected to AISStream WebSocket");
@@ -135,7 +143,9 @@ export class MaritimeIngestor extends BaseIngestor {
     }
   }
 
-  private handleAisMessage(msg: any): void {
+  private handleAisMessage(raw: unknown): void {
+    const result = aisSchema.safeParse(raw); if(!result.success) return;
+    const msg = result.data;
     const meta = msg.MetaData;
     if (!meta || !meta.MMSI) return;
 
@@ -190,7 +200,8 @@ export class MaritimeIngestor extends BaseIngestor {
   }
 
   async fetchData(): Promise<NormalizedObservation[]> {
-    const liveVessels = Array.from(vesselCache.values());
+    void this.initWebSocketClient();
+    const liveVessels = Array.from(vesselCache.values()).filter(v => Date.now() - v.timestamp < 600000);
 
     // Also return chokepoints and top ports as persistent maritime entities
     const infrastructure: NormalizedObservation[] = [

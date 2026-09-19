@@ -1,33 +1,13 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
+import { useIntelligenceStore } from "@/store/intelligenceStore";
 import { TrendingUp, TrendingDown, DollarSign, Vote, RefreshCw } from "lucide-react";
 
 export const MarketsPanel: React.FC = () => {
-  const [marketItems, setMarketItems] = useState<any[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
-
-  const fetchMarkets = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/live/market");
-      if (res.ok) {
-        const data = await res.json();
-        setMarketItems(data.items || []);
-      }
-    } catch (err) {
-      console.warn("Failed to fetch markets:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchMarkets();
-    const interval = setInterval(fetchMarkets, 60000);
-    return () => clearInterval(interval);
-  }, []);
-
+  const marketItems = useIntelligenceStore(s => s.markets);
+  const loading = false;
+  const fetchMarkets = () => useIntelligenceStore.getState().refresh();
   const tickers = marketItems.filter((m) => m.source === "yahoo_finance");
   const predictions = marketItems.filter((m) => m.source === "polymarket");
 
@@ -64,7 +44,7 @@ export const MarketsPanel: React.FC = () => {
           ) : (
             <div className="grid grid-cols-2 gap-1.5 font-mono-hud">
               {tickers.map((t) => {
-                const isPositive = (t.data.changePct || 0) >= 0;
+                const isPositive = Number(t.data.changePct ?? 0) >= 0;
                 return (
                   <div
                     key={t.id}
@@ -72,15 +52,15 @@ export const MarketsPanel: React.FC = () => {
                   >
                     <div>
                       <span className="font-bold text-slate-200 block text-[11px]">
-                        {t.data.symbol}
+                        {String(t.data.symbol ?? "")}
                       </span>
                       <span className="text-slate-500 text-[9px] truncate block max-w-[90px]">
-                        {t.data.name}
+                        {String(t.data.name ?? "")}
                       </span>
                     </div>
                     <div className="text-right">
                       <span className="text-slate-100 font-bold block text-[11px]">
-                        ${(t.data.price || 0).toFixed(2)}
+                        ${Number(t.data.price ?? 0).toFixed(2)}
                       </span>
                       <span
                         className={`text-[9px] flex items-center justify-end space-x-0.5 ${
@@ -92,7 +72,7 @@ export const MarketsPanel: React.FC = () => {
                         ) : (
                           <TrendingDown className="w-2.5 h-2.5" />
                         )}
-                        <span>{(t.data.changePct || 0).toFixed(2)}%</span>
+                        <span>{Number(t.data.changePct ?? 0).toFixed(2)}%</span>
                       </span>
                     </div>
                   </div>
@@ -121,11 +101,11 @@ export const MarketsPanel: React.FC = () => {
                   <div className="flex items-center space-x-1.5 max-w-[70%]">
                     <Vote className="w-3 h-3 text-cyan-400 shrink-0" />
                     <span className="text-[11px] text-slate-200 truncate">
-                      {p.data.title}
+                      {String(p.data.title ?? "")}
                     </span>
                   </div>
                   <span className="text-cyan-300 font-bold text-xs bg-slate-800 px-2 py-0.5 rounded">
-                    {((p.data.yesProbability || 0.5) * 100).toFixed(0)}% YES
+                    {(Number(p.data.yesProbability ?? 0.5) * 100).toFixed(0)}% YES
                   </span>
                 </div>
               ))}

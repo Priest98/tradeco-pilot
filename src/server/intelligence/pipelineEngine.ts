@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { haversineDistanceKm } from "./anomalyEngine";
 import { AnomalyRecord } from "./anomalyEngine";
 import { llmProvider } from "./llmProvider";
 import { wrapInQuarantineBlock } from "./promptDefense";
@@ -18,7 +20,7 @@ export interface IntelligenceDossier {
     supportingEvidence: string[];
     contradictingEvidence: string[];
   }>;
-  forecast: {
+  forecast?: {
     question: string;
     probability: number;
     targetDate: string;
@@ -53,17 +55,18 @@ export class PipelineEngine {
 
     // STAGE 2: INVESTIGATOR (Context & Evidence Gathering)
     const db = getDatabase();
-    let contextualObservations: any[] = [];
+    let contextualObservations: Array<{domain:string; source:string; lat:number|null; lon:number|null; data_json:string; timestamp:number}> = [];
     try {
       const stmt = db.prepare(`
         SELECT domain, source, entity_id, lat, lon, data_json, timestamp
         FROM observations
         WHERE timestamp >= ? AND timestamp <= ?
-        LIMIT 25
+        ORDER BY timestamp DESC
+        LIMIT 250
       `);
       const windowStart = anomaly.timestamp - 3 * 60 * 60 * 1000;
       const windowEnd = anomaly.timestamp + 1 * 60 * 60 * 1000;
-      contextualObservations = stmt.all(windowStart, windowEnd) as any[];
+      contextualObservations = stmt.all(windowStart, windowEnd) as typeof contextualObservations;
     } catch {}
 
     // STAGE 3, 4, 5, 6, 7: NEURAL REASONING BRAIN WITH QUARANTINED CONTEXT
@@ -127,44 +130,33 @@ Respond ONLY with valid JSON matching this exact structure:
 }
 `.trim();
 
-    let aiResult: any = null;
+    const text = z.string().max(8000);
+    const schema = z.object({ threatLevel:z.enum(["CRITICAL","HIGH","ELEVATED","LOW"]),bluf:text,summary:text,locationName:text,
+      keyDrivers:z.array(text).max(20),competingHypotheses:z.array(z.object({hypothesis:text,probability:z.number().min(0).max(1),supportingEvidence:z.array(text),contradictingEvidence:z.array(text)})).min(1).max(5).refine(h=>Math.abs(h.reduce((s,x)=>s+x.probability,0)-1)<0.01),
+      forecast:z.object({question:text,probability:z.number().min(0).max(1),targetDate:z.string().refine(d=>Number.isFinite(Date.parse(d)) && Date.parse(d)>now),falsifiableCriteria:text}),
+      marketImpact:z.object({crudeOil:text,gold:text,usDollar:text,defenseEquities:text,polymarketImplication:text}),
+      noTradeRecommendation:z.object({verdict:z.enum(["DO_NOTHING","WATCH_ONLY","HIGH_CONVICTION_HEDGE"]),rationale:text,falsificationTrigger:text}) });
+    let aiResult: z.infer<typeof schema>;
+    let modelAvailable = true;
     try {
       const responseText = await llmProvider.generate(prompt, {
         jsonMode: true,
         temperature: 0.1,
       });
-      aiResult = JSON.parse(responseText);
+      aiResult = schema.parse(JSON.parse(responseText));
     } catch {
-      // Deterministic fallback if offline/no key
+      modelAvailable = false;
+      // Explicitly unvalidated offline summary.
       aiResult = {
         threatLevel: anomaly.zScore > 3.5 ? "HIGH" : "ELEVATED",
         bluf: `Statistical anomaly detected in domain ${anomaly.domain.toUpperCase()}: ${anomaly.summary}. Initial automated triage flags elevated activity requiring multi-source corroboration.`,
         summary: anomaly.summary,
         locationName: anomaly.lat && anomaly.lon ? `Sector (${anomaly.lat.toFixed(2)}, ${anomaly.lon.toFixed(2)})` : "Global Airspace/Maritime",
         keyDrivers: [
-          `Z-Score deviation of ${anomaly.zScore.toFixed(1)} against 30-day baseline`,
+          `Recorded score ${anomaly.zScore.toFixed(1)}; inspect baseline evidence for sample coverage`,
           `Observed telemetry in ${anomaly.domain} domain`,
         ],
-        competingHypotheses: [
-          {
-            hypothesis: "Operational exercise or routine scheduled transit with delayed reporting",
-            probability: 0.55,
-            supportingEvidence: ["Absence of kinetic conflict alerts on GDACS/GDELT", "Historical exercise corridor"],
-            contradictingEvidence: ["Unusual formation density", "Elevated EW/jamming signal"],
-          },
-          {
-            hypothesis: "Unannounced tactical repositioning or heightened regional posture",
-            probability: 0.35,
-            supportingEvidence: ["Elevated Z-score", "Concurrently observed telemetry anomalies"],
-            contradictingEvidence: ["No official diplomatic or military advisories issued"],
-          },
-          {
-            hypothesis: "Sensor corruption or ADS-B / transponder rebroadcast anomaly",
-            probability: 0.10,
-            supportingEvidence: ["Known GPS interference in sector"],
-            contradictingEvidence: ["Corroborated across multiple receiver stations"],
-          },
-        ],
+        competingHypotheses: [],
         forecast: {
           question: `Will heightened military/EW activity in this sector persist for more than 48 hours?`,
           probability: 0.40,
@@ -200,20 +192,28 @@ Respond ONLY with valid JSON matching this exact structure:
       },
       keyDrivers: aiResult.keyDrivers || [],
       competingHypotheses: aiResult.competingHypotheses || [],
-      forecast: aiResult.forecast,
-      marketImpact: aiResult.marketImpact,
+      forecast: modelAvailable ? aiResult.forecast : undefined,
+      marketImpact: modelAvailable ? aiResult.marketImpact : {crudeOil:"Unavailable",gold:"Unavailable",usDollar:"Unavailable",defenseEquities:"Unavailable",polymarketImplication:"Unavailable"},
       noTradeRecommendation: aiResult.noTradeRecommendation,
     };
 
+    const nearby = contextualObservations.filter(o => o.lat !== null && o.lon !== null && anomaly.lat !== undefined && anomaly.lon !== undefined && haversineDistanceKm(anomaly.lat,anomaly.lon,o.lat,o.lon)<=120 && o.source !== "static_intelligence");
+    const domains = new Set(nearby.map(o=>o.domain));
+    const sources = new Set(nearby.map(o=>o.source));
+    // Corroboration is necessary, but does not itself establish an unpriced edge.
+    dossier.noTradeRecommendation = { verdict: "DO_NOTHING", rationale: domains.size<2 || sources.size<2 ? "NO-TRADE: insufficient independent multi-domain corroboration within 120 km." : "NO-TRADE: corroboration exists, but an independently verified unpriced edge has not been established.", falsificationTrigger: "Independent validation of evidence and market pricing is required." };
+    if (!modelAvailable) dossier.bluf = "AI unavailable. Unvalidated rule-based observation summary: " + anomaly.summary;
+
     // Persist event dossier and forecast ledger into SQLite
-    this.persistDossier(dossier);
+    this.persistDossier(dossier, modelAvailable);
 
     return dossier;
   }
 
-  private persistDossier(dossier: IntelligenceDossier): void {
+  private persistDossier(dossier: IntelligenceDossier, persistForecast: boolean): void {
     try {
       const db = getDatabase();
+      db.exec("BEGIN IMMEDIATE");
 
       // 1. Save to correlated_events
       const eventStmt = db.prepare(`
@@ -236,7 +236,7 @@ Respond ONLY with valid JSON matching this exact structure:
       );
 
       // 2. Save forecast to calibrated ledger
-      if (dossier.forecast) {
+      if (persistForecast && dossier.forecast) {
         const forecastStmt = db.prepare(`
           INSERT OR REPLACE INTO forecast_ledger (id, event_id, question, probability, target_date, created_at, rationale)
           VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -253,8 +253,10 @@ Respond ONLY with valid JSON matching this exact structure:
           dossier.forecast.falsifiableCriteria
         );
       }
+      db.exec("COMMIT");
     } catch (err) {
-      console.error("[PipelineEngine] SQLite dossier persistence failed:", err);
+      try { getDatabase().exec("ROLLBACK"); } catch {}
+      throw err;
     }
   }
 }

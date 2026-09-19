@@ -43,10 +43,10 @@ export async function GET(
       LIMIT 1000
     `);
 
-    let rows = stmt.all(domain, twoHoursAgo) as any[];
+    let rows = stmt.all(domain, twoHoursAgo) as Array<{id:string;domain:string;source:string;entityId:string|undefined;lat:number|undefined;lon:number|undefined;alt:number|undefined;timestamp:number;dataJson:string}>;
 
     // If database is empty on cold start, trigger active ingestor for domain
-    if (rows.length === 0) {
+    if (rows.length === 0 || Date.now() - Number(rows[0]?.timestamp ?? 0) > 60000) {
       const matchingIngestor = Array.from(ingestorRegistry["ingestors"].values()).find(
         (i) => i.domain === domain
       );
@@ -72,7 +72,8 @@ export async function GET(
       }
     }
 
-    const items = rows.map((r) => ({
+    const seen = new Set<string>();
+    const items = rows.filter(r => { const key = `${r.source}:${r.entityId || r.id}`; if(seen.has(key)) return false; seen.add(key); return true; }).map((r) => ({
       id: r.id,
       domain: r.domain,
       source: r.source,
@@ -90,9 +91,9 @@ export async function GET(
       timestamp: Date.now(),
       items,
     });
-  } catch (err: any) {
+  } catch (err) {
     return NextResponse.json(
-      { error: `Failed to retrieve live data for ${domain}`, message: err.message },
+      { error: `Failed to retrieve live data for ${domain}` },
       { status: 500 }
     );
   }

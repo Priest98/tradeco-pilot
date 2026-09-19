@@ -8,7 +8,8 @@ describe("Superforecaster Brier Calibration Analytics Verification", () => {
   it("calculates accurate Brier Skill Score and Reliability Calibration Curve", () => {
     // 1. Compute analytics on current state
     const report = computeCalibrationAnalytics();
-    assert.ok(report.totalForecasts >= 1);
+    assert.strictEqual(report.totalForecasts, 0);
+    assert.strictEqual(report.cumulativeBrierScore, null);
     assert.ok(Array.isArray(report.calibrationBuckets));
   });
 

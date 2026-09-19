@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { BaseIngestor, NormalizedObservation } from "./base";
 import { safeFetch } from "@/server/security/ssrfGuard";
 import { getEnv } from "@/config/env";
@@ -25,7 +26,7 @@ export class ThermalIngestor extends BaseIngestor {
             skip_empty_lines: true,
           });
 
-          return records.slice(0, 1000).map((r: any, idx: number): NormalizedObservation => {
+          return z.array(z.record(z.string())).parse(records).slice(0, 1000).map((r: Record<string, string>, idx: number): NormalizedObservation => {
             const lat = parseFloat(r.latitude);
             const lon = parseFloat(r.longitude);
             const brightness = parseFloat(r.bright_ti4 || r.brightness || "0");
@@ -84,7 +85,7 @@ export class ThermalIngestor extends BaseIngestor {
           category: ev.categories?.[0]?.title || "Natural Hazard",
           magnitudeValue: geometry.magnitudeValue,
           magnitudeUnit: geometry.magnitudeUnit,
-          sources: ev.sources?.map((s: any) => s.url) || [],
+          sources: ev.sources?.map((s: {url: string}) => s.url) || [],
         },
       });
     }

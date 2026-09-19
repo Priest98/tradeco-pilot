@@ -3,6 +3,9 @@
 import React, { useEffect, useState } from "react";
 import { Shield, Radio, Activity, Globe, Satellite, AlertTriangle, Clock } from "lucide-react";
 
+import { useIntelligenceStore } from "@/store/intelligenceStore";
+import { enableAudio } from "@/lib/audioFX";
+
 interface HeaderProps {
   threatLevel?: "CRITICAL" | "HIGH" | "ELEVATED" | "LOW";
   activeAnomalyCount: number;
@@ -14,6 +17,7 @@ export const WorkstationHeader: React.FC<HeaderProps> = ({
   activeAnomalyCount,
   systemStatus = "OPERATIONAL",
 }) => {
+  const muted = useIntelligenceStore(s => s.muted);
   const [zuluTime, setZuluTime] = useState<string>("");
 
   useEffect(() => {
@@ -65,20 +69,24 @@ export const WorkstationHeader: React.FC<HeaderProps> = ({
       <div className="hidden lg:flex items-center space-x-6 text-xs text-slate-300 font-mono-hud">
         <div className="flex items-center space-x-1.5">
           <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-          <span>ADS-B: <strong className="text-cyan-300">ONLINE</strong></span>
+          <span>ADS-B: <strong className="text-cyan-300">FEED</strong></span>
         </div>
         <div className="flex items-center space-x-1.5">
           <Satellite className="w-3.5 h-3.5 text-emerald-400" />
-          <span>SGP4 ORBIT: <strong className="text-emerald-300">ACTIVE</strong></span>
+          <span>SGP4 ORBIT: <strong className="text-emerald-300">FEED</strong></span>
         </div>
         <div className="flex items-center space-x-1.5">
           <Activity className="w-3.5 h-3.5 text-amber-400" />
-          <span>H3 JAMMING: <strong className="text-amber-300">TRACKING</strong></span>
+          <span>H3 JAMMING: <strong className="text-amber-300">FEED</strong></span>
         </div>
       </div>
 
       {/* Right Controls: Zulu Clock & Threat Level */}
       <div className="flex items-center space-x-3">
+        <button className="text-xs" onClick={async () => { try { await enableAudio(muted); useIntelligenceStore.setState({ muted: !muted }); } catch { useIntelligenceStore.setState({ error: "Audio unavailable" }); } }}>{muted ? "UNMUTE" : "MUTE"}</button>
+        <a className="text-xs" href="/api/briefing?format=markdown" download>PDB MD</a>
+        <a className="text-xs" href="/api/briefing?format=pdf" download>PDB PDF</a>
+        <button className="text-xs" onClick={() => { const key = window.prompt("System API key (stored for this tab only)"); if (key) sessionStorage.setItem("system-key", key); }}>API KEY</button>
         {/* Active Anomalies Badge */}
         <div className="flex items-center space-x-1.5 px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-xs font-mono-hud">
           <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />

@@ -33,9 +33,9 @@ export function computeCalibrationAnalytics(): CalibrationAnalyticsReport {
     SELECT id, question, probability, outcome, brier_score, target_date, created_at, resolved_at
     FROM forecast_ledger
     ORDER BY created_at DESC
-  `).all() as any[];
+  `).all() as Array<{id:string;question:string;probability:number;outcome:number|null;brier_score:number|null;target_date:number;created_at:number;resolved_at:number|null}>;
 
-  const resolved = allRows.filter((r) => r.outcome !== null && r.outcome !== undefined);
+  const resolved = allRows.filter((r): r is typeof r & {outcome:number} => (r.outcome === 0 || r.outcome === 1) && Number.isFinite(r.probability) && r.probability >= 0 && r.probability <= 1);
   const unresolved = allRows.filter((r) => r.outcome === null || r.outcome === undefined);
 
   if (resolved.length === 0) {
@@ -55,7 +55,7 @@ export function computeCalibrationAnalytics(): CalibrationAnalyticsReport {
   const brierSum = resolved.reduce((acc, r) => {
     const p = Number(r.probability);
     const o = Number(r.outcome);
-    const itemScore = r.brier_score !== null ? Number(r.brier_score) : Math.pow(p - o, 2);
+    const itemScore = Math.pow(p - o, 2);
     return acc + itemScore;
   }, 0);
 
@@ -118,7 +118,7 @@ export function computeCalibrationAnalytics(): CalibrationAnalyticsReport {
       question: r.question,
       probability: r.probability,
       outcome: r.outcome,
-      brierScore: r.brier_score !== null ? r.brier_score : Math.pow(r.probability - r.outcome, 2),
+      brierScore: Math.pow(r.probability - r.outcome, 2),
       resolvedAt: r.resolved_at || Date.now(),
     })),
   };
@@ -128,14 +128,16 @@ export function computeCalibrationAnalytics(): CalibrationAnalyticsReport {
  * Resolves a forecast in SQLite and records Brier score.
  */
 export function resolveForecastRecord(forecastId: string, outcome: 0 | 1): { brierScore: number } {
+  if (outcome !== 0 && outcome !== 1) throw new Error("Outcome must be binary");
   const db = getDatabase();
-  const row = db.prepare("SELECT probability FROM forecast_ledger WHERE id = ?").get(forecastId) as any;
+  const row = db.prepare("SELECT probability FROM forecast_ledger WHERE id = ?").get(forecastId) as {probability:number} | undefined;
 
   if (!row) {
     throw new Error(`Forecast with ID ${forecastId} not found`);
   }
 
   const p = Number(row.probability);
+  if(!Number.isFinite(p) || p<0 || p>1) throw new Error("Invalid forecast probability");
   const brierScore = parseFloat(Math.pow(p - outcome, 2).toFixed(4));
   const now = Date.now();
 

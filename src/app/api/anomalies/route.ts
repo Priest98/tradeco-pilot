@@ -1,3 +1,4 @@
+import type { AnomalyRecord } from "@/server/intelligence/anomalyEngine";
 import { NextResponse } from "next/server";
 import { anomalyEngine } from "@/server/intelligence/anomalyEngine";
 import { pipelineEngine } from "@/server/intelligence/pipelineEngine";
@@ -18,9 +19,9 @@ export async function GET() {
       anomalies,
       timestamp: Date.now(),
     });
-  } catch (err: any) {
+  } catch (err) {
     return NextResponse.json(
-      { error: "Failed to fetch anomalies", message: err.message },
+      { error: "Failed to fetch anomalies" },
       { status: 500 }
     );
   }
@@ -47,7 +48,7 @@ export async function POST(req: Request) {
       WHERE id = ?
     `);
 
-    const row = stmt.get(anomalyId) as any;
+    const row = stmt.get(anomalyId) as (Omit<AnomalyRecord,"evidence"> & {evidenceJson:string}) | undefined;
     if (!row) {
       return NextResponse.json(
         { error: "Anomaly not found", anomalyId },
@@ -77,9 +78,9 @@ export async function POST(req: Request) {
       message: "Intelligence pipeline completed",
       dossier,
     });
-  } catch (err: any) {
+  } catch (err) {
     return NextResponse.json(
-      { error: "Pipeline execution failed", message: err.message },
+      { error: "Pipeline execution failed" },
       { status: 500 }
     );
   }

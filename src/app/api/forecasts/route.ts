@@ -19,14 +19,14 @@ export async function GET() {
       LIMIT 100
     `);
 
-    const rows = stmt.all() as any[];
+    const rows = stmt.all() as Array<{id:string;probability:number;outcome:number|null;brierScore:number|null}>;
 
     // Calculate aggregate Brier score across resolved forecasts
     const resolved = rows.filter((r) => r.outcome !== null);
     let meanBrierScore: number | null = null;
 
     if (resolved.length > 0) {
-      const sum = resolved.reduce((acc, r) => acc + (r.brierScore || 0), 0);
+      const sum = resolved.reduce((acc, r) => acc + Math.pow(r.probability-Number(r.outcome),2), 0);
       meanBrierScore = parseFloat((sum / resolved.length).toFixed(4));
     }
 
@@ -44,9 +44,9 @@ export async function GET() {
           : "NEEDS_CALIBRATION",
       forecasts: rows,
     });
-  } catch (err: any) {
+  } catch (err) {
     return NextResponse.json(
-      { error: "Failed to fetch forecasts", message: err.message },
+      { error: "Failed to fetch forecasts" },
       { status: 500 }
     );
   }
@@ -94,9 +94,9 @@ export async function POST(req: Request) {
       brierScore,
       resolvedAt: new Date(now).toISOString(),
     });
-  } catch (err: any) {
+  } catch (err) {
     return NextResponse.json(
-      { error: "Resolution failed", message: err.message },
+      { error: "Resolution failed" },
       { status: 500 }
     );
   }

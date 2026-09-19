@@ -1,3 +1,4 @@
+import { Agent, fetch as pinnedFetch } from "undici";
 import { lookup } from "node:dns/promises";
 import { isIP } from "node:net";
 
@@ -61,8 +62,8 @@ function isIPv4Blocked(ip: string): boolean {
 }
 
 function isIPv6Blocked(ip: string): boolean {
-  const lower = ip.toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
-  if (lower === "::" || lower === "::1") return true;
+  const lower = new URL(`http://[${ip.replace(/^\[|\]$/g, "")}]`).hostname.slice(1, -1).toLowerCase();
+  if (!/^[23][0-9a-f]{3}:/.test(lower) || lower.startsWith("2002:") || /^2001:(?:0|[1-9a-f][0-9a-f]?):/.test(lower)) return true;
   for (const prefix of IPV6_BLOCKED_PREFIXES) {
     if (lower.startsWith(prefix)) return true;
   }
@@ -75,6 +76,7 @@ function isIPv6Blocked(ip: string): boolean {
  */
 export function parseCanonicalIPv4(s: string): string | null {
   if (/^(\d{1,3}\.){3}\d{1,3}$/.test(s)) {
+    if (s.split(".").some(part => part.length > 1 && part.startsWith("0"))) return null;
     const parts = s.split(".").map(Number);
     if (parts.some((p) => p < 0 || p > 255)) return null;
     return parts.join(".");
@@ -201,14 +203,26 @@ export async function safeFetch(
         throw new Error(`safeFetch: Blocked target: ${hostCheck.reason}`);
       }
 
-      const response = await fetch(currentUrl, fetchInit);
+      if (parsed.username || parsed.password) throw new Error("URL credentials are forbidden");
+      const address = hostCheck.resolved![0];
+      const dispatcher = new Agent({ connect: { autoSelectFamily: false, lookup: (_host, _options, callback) => callback(null, address, isIP(address)) } });
+      let response: Response;
+      try {
+        const upstream = await pinnedFetch(currentUrl, { method: fetchInit.method, headers: Object.fromEntries(new Headers(fetchInit.headers)), signal: init.signal ? AbortSignal.any([init.signal,controller.signal]) : controller.signal, redirect: "manual", dispatcher });
+        const reader=upstream.body?.getReader(); const chunks: Uint8Array[]=[]; let length=0;
+        if(reader) { for(;;) { const {done,value}=await reader.read(); if(done) break; length+=value.byteLength; if(length>20*1024*1024) { await reader.cancel(); throw new Error("Upstream response too large"); } chunks.push(value); } }
+        const bytes=new Uint8Array(length); let offset=0; for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+        response = new Response([204, 205, 304].includes(upstream.status) ? null : bytes, { status: upstream.status, headers: Object.fromEntries(upstream.headers) });
+      } finally { await dispatcher.close(); }
 
       // Handle redirects securely by re-validating the target URL
       if (response.status >= 300 && response.status < 400) {
         const redirectTarget = response.headers.get("location");
         if (!redirectTarget) return response;
 
-        currentUrl = new URL(redirectTarget, currentUrl).toString();
+        const next = new URL(redirectTarget, currentUrl);
+        if (next.origin !== parsed.origin) { const headers = new Headers(fetchInit.headers); headers.delete("authorization"); headers.delete("cookie"); fetchInit.headers = headers; }
+        currentUrl = next.toString();
         continue;
       }
 

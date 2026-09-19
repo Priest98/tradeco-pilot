@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const startTime = Date.now();
-  const ingestorHealth = ingestorRegistry.getAllHealth();
+  const ingestorHealth = ingestorRegistry.getAllHealth().map(h => ({...h,lastError:h.lastError ? "Feed unavailable" : undefined}));
 
   let dbStats = {
     totalObservations: 0,
@@ -38,7 +38,7 @@ export async function GET() {
     version: "1.0.0",
     zuluTime: new Date().toISOString(),
     uptimeSeconds: Math.floor(process.uptime()),
-    database: dbStats,
+    database: {...dbStats, durability:process.env.VERCEL ? "ephemeral_instance_local" : "local_persistent"},
     ingestors: ingestorHealth,
     queryLatencyMs: Date.now() - startTime,
   });

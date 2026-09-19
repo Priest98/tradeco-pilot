@@ -17,7 +17,7 @@ export class SeismicIngestor extends BaseIngestor {
     const data = await res.json();
     const features = Array.isArray(data.features) ? data.features : [];
 
-    return features.map((feat: any): NormalizedObservation => {
+    return features.map((feat: {id: string; geometry?: {coordinates: number[]}; properties?: {mag?: number; place?: string; time?: number; tsunami?: number; url?: string; sig?: number}}): NormalizedObservation => {
       const [lon, lat, depth] = feat.geometry?.coordinates || [0, 0, 0];
       const mag = feat.properties?.mag ?? 0;
       const place = feat.properties?.place ?? "Unknown location";

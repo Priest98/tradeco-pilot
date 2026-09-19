@@ -1,6 +1,9 @@
 "use client";
+import { useIntelligenceStore, startIntelligencePolling } from "@/store/intelligenceStore";
+import { playAlert } from "@/lib/audioFX";
 
-import React, { useState, useEffect } from "react";
+
+import React, { useEffect } from "react";
 import dynamic from "next/dynamic";
 import { WorkstationHeader } from "@/components/workstation/WorkstationHeader";
 import { AnomalyRadarPanel, AnomalyItem } from "@/components/workstation/AnomalyRadarPanel";
@@ -25,36 +28,15 @@ const CesiumGlobe = dynamic(
 );
 
 export default function WorkstationPage() {
-  const [anomalies, setAnomalies] = useState<AnomalyItem[]>([]);
-  const [selectedDossier, setSelectedDossier] = useState<IntelligenceDossier | null>(null);
-  const [investigatingId, setInvestigatingId] = useState<string | null>(null);
-  const [systemThreatLevel, setSystemThreatLevel] = useState<"CRITICAL" | "HIGH" | "ELEVATED" | "LOW">("ELEVATED");
-
-  // Fetch active anomalies
-  const loadAnomalies = async () => {
-    try {
-      const res = await fetch("/api/anomalies");
-      if (res.ok) {
-        const data = await res.json();
-        setAnomalies(data.anomalies || []);
-
-        // Derive overall system threat level
-        const maxZ = Math.max(0, ...(data.anomalies || []).map((a: AnomalyItem) => a.zScore));
-        if (maxZ >= 4.0) setSystemThreatLevel("CRITICAL");
-        else if (maxZ >= 3.0) setSystemThreatLevel("HIGH");
-        else if (maxZ >= 2.0) setSystemThreatLevel("ELEVATED");
-        else setSystemThreatLevel("LOW");
-      }
-    } catch (err) {
-      console.warn("Failed to load anomalies:", err);
-    }
-  };
-
-  useEffect(() => {
-    loadAnomalies();
-    const interval = setInterval(loadAnomalies, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  const anomalies = useIntelligenceStore(s => s.anomalies);
+  const selectedDossier = useIntelligenceStore(s => s.selectedDossier);
+  const investigatingId = useIntelligenceStore(s => s.investigatingId);
+  const error = useIntelligenceStore(s => s.error);
+  const setInvestigatingId = (investigatingId: string | null) => useIntelligenceStore.setState({ investigatingId });
+  const setSelectedDossier = (selectedDossier: IntelligenceDossier | null) => useIntelligenceStore.setState({ selectedDossier });
+  const maxZ = Math.max(0, ...anomalies.map(a => a.zScore));
+  const systemThreatLevel = anomalies.some(a=>a.anomalyType === "emergency_squawk") ? "HIGH" : maxZ >= 4 ? "CRITICAL" : maxZ >= 3 ? "HIGH" : maxZ >= 2 ? "ELEVATED" : "LOW";
+  useEffect(startIntelligencePolling, []);
 
   // Trigger 7-Stage Multi-Role AI Reasoning Pipeline
   const handleInvestigateAnomaly = async (anomaly: AnomalyItem) => {
@@ -62,18 +44,20 @@ export default function WorkstationPage() {
     try {
       const res = await fetch("/api/anomalies", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-system-key": sessionStorage.getItem("system-key") || "" },
         body: JSON.stringify({ anomalyId: anomaly.id }),
       });
 
+      if (!res.ok) throw new Error(res.status === 401 ? "Set the system API key to investigate." : "Investigation unavailable.");
       if (res.ok) {
         const data = await res.json();
         if (data.dossier) {
           setSelectedDossier(data.dossier);
+          playAlert("dossier");
         }
       }
     } catch (err) {
-      console.error("Investigation failed:", err);
+      useIntelligenceStore.setState({error:err instanceof Error ? err.message : "Investigation failed"});
     } finally {
       setInvestigatingId(null);
     }
@@ -87,6 +71,7 @@ export default function WorkstationPage() {
         activeAnomalyCount={anomalies.length}
       />
 
+      {error && <div role="status" className="text-xs text-amber-300 px-4 py-1">{error}</div>}
       {/* Main Viewport */}
       <div className="flex flex-1 overflow-hidden relative">
         {/* Left: Statistical Anomaly Radar */}

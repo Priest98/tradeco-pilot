@@ -1,3 +1,4 @@
+import { calculateBaseline } from "./baseline";
 import { getDatabase } from "@/server/db/client";
 import { NormalizedObservation } from "@/server/ingestors/base";
 
@@ -11,7 +12,7 @@ export interface AnomalyRecord {
   lat?: number;
   lon?: number;
   summary: string;
-  evidence: Record<string, any>;
+  evidence: Record<string, unknown>;
   status: "active" | "investigated" | "dismissed";
 }
 
@@ -105,7 +106,7 @@ export class AnomalyEngine {
 
     // 3. Rule: High-Severity GPS Jamming Burst (> 50% jamming ratio)
     const jammingHexes = observations.filter(
-      (o) => o.domain === "gpsjam" && (o.data.jammingRatio >= 0.4 || o.data.severity === "high")
+      (o) => o.domain === "gpsjam" && (Number(o.data.jammingRatio) >= 0.4 || o.data.severity === "high")
     );
 
     for (const j of jammingHexes.slice(0, 5)) {
@@ -118,7 +119,7 @@ export class AnomalyEngine {
         confidence: 0.88,
         lat: j.lat,
         lon: j.lon,
-        summary: `Severe electronic warfare / GPS jamming burst: ${(j.data.jammingRatio * 100).toFixed(0)}% degraded navigation signals in sector ${j.data.hex}`,
+        summary: `Severe electronic warfare / GPS jamming burst: ${(Number(j.data.jammingRatio) * 100).toFixed(0)}% degraded navigation signals in sector ${j.data.hex}`,
         evidence: j.data,
         status: "active",
       });
@@ -154,6 +155,25 @@ export class AnomalyEngine {
       }
     }
 
+    // Historical comparison uses only recorded samples before the current observation.
+    const db = getDatabase();
+    for (const anomaly of detected) {
+      const rows = db.prepare("SELECT timestamp, entity_id, data_json FROM observations WHERE domain=? AND timestamp>=? AND timestamp<? AND lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? ORDER BY timestamp").all(anomaly.domain, now-30*86400000, now-3600000, (anomaly.lat ?? 0)-1.5, (anomaly.lat ?? 0)+1.5, (anomaly.lon ?? 0)-1.5, (anomaly.lon ?? 0)+1.5);
+      const bins = new Map<number, Set<string>>();
+      const ratios = new Map<number, number[]>();
+      for (const row of rows) {
+        const data = JSON.parse(String(row.data_json)) as Record<string, unknown>;
+        const hour = Math.floor(Number(row.timestamp)/3600000);
+        if (anomaly.domain === "gpsjam" && typeof data.jammingRatio === "number") { const values=ratios.get(hour)||[];values.push(data.jammingRatio);ratios.set(hour,values); }
+        else { const values=bins.get(hour)||new Set<string>(); if(data.isMilitary===true)values.add(String(row.entity_id)); bins.set(hour,values); }
+      }
+      const samples = anomaly.domain === "gpsjam" ? [...ratios.values()].map(v=>v.reduce((a,b)=>a+b,0)/v.length) : [...bins.values()].map(v=>v.size);
+      const value = anomaly.domain === "gpsjam" ? Number(anomaly.evidence.jammingRatio) : Number(anomaly.evidence.aircraftCount ?? 0);
+      const baseline = calculateBaseline(samples, value);
+      anomaly.evidence = { ...anomaly.evidence, baseline, ruleTriggered: true };
+      anomaly.zScore = anomaly.anomalyType === "emergency_squawk" || anomaly.anomalyType === "multi_domain_cooccurrence" ? 0 : baseline.zScore ?? 0;
+    }
+
     // Persist anomalies into SQLite
     if (detected.length > 0) {
       this.persistAnomalies(detected);
@@ -170,7 +190,7 @@ export class AnomalyEngine {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      db.exec("BEGIN TRANSACTION;");
+      db.exec("BEGIN IMMEDIATE;");
       for (const a of anomalies) {
         insertStmt.run(
           a.id,
@@ -210,7 +230,7 @@ export class AnomalyEngine {
         LIMIT ?
       `);
 
-      const rows = stmt.all(limit) as any[];
+      const rows = stmt.all(limit) as Array<Omit<AnomalyRecord, "evidence"> & {evidenceJson: string}>;
       return rows.map((r) => ({
         id: r.id,
         timestamp: r.timestamp,

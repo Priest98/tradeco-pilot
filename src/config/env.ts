@@ -10,7 +10,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
 
   // Master security authentication key for API access (Checklist 3.1 & 3.6)
-  SYSTEM_API_KEY: z.string().min(16, "SYSTEM_API_KEY must be at least 16 characters for secure bearer authentication"),
+  SYSTEM_API_KEY: z.string().min(16, "SYSTEM_API_KEY must be at least 16 characters").optional(),
 
   // Primary LLM reasoning key (Gemini 2.0 Flash)
   GEMINI_API_KEY: z.string().optional(),
@@ -42,7 +42,7 @@ export function getEnv(): EnvConfig {
   const rawEnv = {
     NODE_ENV: process.env.NODE_ENV || "development",
     PORT: process.env.PORT || 3000,
-    SYSTEM_API_KEY: process.env.SYSTEM_API_KEY || (process.env.NODE_ENV === "production" ? "prod-system-key-placeholder-change-in-env-32" : "dev-session-key-" + (process.env.COMPUTERNAME || "local")),
+    SYSTEM_API_KEY: process.env.SYSTEM_API_KEY,
     GEMINI_API_KEY: process.env.GEMINI_API_KEY,
     ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
     OPENAI_API_KEY: process.env.OPENAI_API_KEY,

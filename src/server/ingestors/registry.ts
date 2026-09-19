@@ -1,3 +1,4 @@
+import { anomalyEngine } from "../intelligence/anomalyEngine";
 import { BaseIngestor, IngestorHealth } from "./base";
 import { SeismicIngestor } from "./seismic";
 import { ThermalIngestor } from "./thermal";
@@ -39,7 +40,7 @@ class IngestorRegistry {
   }
 
   async runAll(): Promise<void> {
-    const promises = Array.from(this.ingestors.values()).map((ing) => ing.poll());
+    const promises = Array.from(this.ingestors.values()).map((ing) => ing.poll().then(observations=>{anomalyEngine.evaluateBatch(observations);}));
     await Promise.allSettled(promises);
   }
 
@@ -53,7 +54,7 @@ class IngestorRegistry {
     // Schedule intervals
     for (const [name, ingestor] of this.ingestors.entries()) {
       const timer = setInterval(() => {
-        ingestor.poll().catch((err) => {
+        ingestor.poll().then(observations=>{anomalyEngine.evaluateBatch(observations);}).catch((err) => {
           console.error(`[IngestorRegistry] Interval poll error for ${name}:`, err);
         });
       }, ingestor.pollIntervalMs);

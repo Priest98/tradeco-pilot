@@ -24,9 +24,10 @@ export function quarantineObservationText(rawText: string): string {
 /**
  * Wraps external raw OSINT feeds into a secure, quarantined data context.
  */
-export function wrapInQuarantineBlock(label: string, data: Record<string, any> | string): string {
+export function wrapInQuarantineBlock(label: string, data: Record<string, unknown> | string): string {
   const serialized = typeof data === "string" ? data : JSON.stringify(data, null, 2);
-  const safeData = quarantineObservationText(serialized);
+  const safeData = quarantineObservationText(serialized).slice(0, 64000).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  label = label.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
 
   return `
 <observation_data type="${label}">

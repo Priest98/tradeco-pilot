@@ -1,362 +1,94 @@
 "use client";
-
 import React, { useEffect, useRef, useState } from "react";
-import { Layers, Eye, EyeOff, Radio, Plane, Anchor, Satellite, Zap, Compass, RefreshCw } from "lucide-react";
+import { loadCesium } from "@/lib/cesium";
+import { positionAt } from "@/lib/replay";
+import type { Viewer, PointPrimitiveCollection } from "cesium";
+import { useIntelligenceStore, type Telemetry } from "@/store/intelligenceStore";
 
-interface CesiumGlobeProps {
-  onSelectEntity?: (entity: any) => void;
-}
-
-export const CesiumGlobe: React.FC<CesiumGlobeProps> = ({ onSelectEntity }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const viewerRef = useRef<any>(null);
-  const [cesiumReady, setCesiumReady] = useState(false);
-  const [layers, setLayers] = useState({
-    aviation: true,
-    maritime: true,
-    satellites: true,
-    gpsjam: true,
-    seismic: true,
-    thermal: true,
-  });
-
-  const [replayHour, setReplayHour] = useState(0); // 0 = live, -1 to -72 hours
-  const [entityCounts, setEntityCounts] = useState({
-    flights: 0,
-    vessels: 0,
-    satellites: 0,
-    jammingHexes: 0,
-  });
-
-  // Initialize Cesium Viewer dynamically in browser
+export const CesiumGlobe: React.FC<{ onSelectEntity?: (entity: Telemetry) => void }> = ({ onSelectEntity }) => {
+  const container = useRef<HTMLDivElement>(null);
+  const viewer = useRef<Viewer | null>(null);
+  const points = useRef<PointPrimitiveCollection | null>(null);
+  const [ready, setReady] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [layers, setLayers] = useState<Record<string, boolean>>({ aviation: true, maritime: true, gpsjam: true, satellite: true, seismic: true, thermal: true });
+  const entities = useIntelligenceStore(s => s.entities);
+  const replayStart = useIntelligenceStore(s => s.replayStart);
+  const replayTime = useIntelligenceStore(s => s.replayTime);
+  const playing = useIntelligenceStore(s => s.playing);
+  const speed = useIntelligenceStore(s => s.speed);
+  const select = useRef(onSelectEntity);
+  select.current = onSelectEntity;
   useEffect(() => {
-    let viewer: any = null;
-    let isMounted = true;
-
-    async function initCesium() {
-      if (typeof window === "undefined" || !containerRef.current) return;
-
-      const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
-      // @ts-expect-error window global
-      window.CESIUM_BASE_URL = isLocal ? "/cesium" : "https://cesium.com/downloads/cesiumjs/releases/1.120/Build/Cesium/";
-
-      try {
-        // @ts-expect-error window global
-        const Cesium = window.Cesium || (await import("cesium"));
-
-        // Set empty Ion token to prevent external credential warnings
-        Cesium.Ion.defaultAccessToken = "";
-
-        if (!isMounted || !containerRef.current) return;
-
-        viewer = new Cesium.Viewer(containerRef.current, {
-          baseLayer: false, // Prevents Cesium Ion default imagery attempt
-          animation: false,
-          baseLayerPicker: false,
-          fullscreenButton: false,
-          geocoder: false,
-          homeButton: false,
-          infoBox: false,
-          sceneModePicker: false,
-          selectionIndicator: false,
-          timeline: false,
-          navigationHelpButton: false,
-          shouldAnimate: true,
-        });
-
-        // Disable Cesium modal error popup on render frame
-        viewer.showRenderLoopErrors = false;
-
-        // Dark Tactical Imagery via pure URL template (100% synchronous, zero metadata endpoints)
-        try {
-          const tileProvider = new Cesium.UrlTemplateImageryProvider({
-            url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-            maximumLevel: 19,
-            credit: "OpenStreetMap Tactical",
-          });
-          const tileLayer = viewer.imageryLayers.addImageryProvider(tileProvider);
-          // Tactical dark styling: desaturate and dim to make tactical telemetry pop
-          tileLayer.brightness = 0.55;
-          tileLayer.contrast = 1.35;
-          tileLayer.saturation = 0.2;
-        } catch (err) {
-          console.warn("Tactical tile provider error:", err);
+    let disposed = false;
+    let cleanup = () => {};
+    (window as Window & { CESIUM_BASE_URL?: string }).CESIUM_BASE_URL = "/cesium/";
+    void loadCesium().then(C => {
+      if (disposed || !container.current) return;
+      (window as Window & { CESIUM_BASE_URL?: string }).CESIUM_BASE_URL = "/cesium/";
+      C.Ion.defaultAccessToken = "";
+      const v = new C.Viewer(container.current, { baseLayer: false, animation: false, baseLayerPicker: false, fullscreenButton: false, geocoder: false, homeButton: false, infoBox: false, sceneModePicker: false, selectionIndicator: false, timeline: false, navigationHelpButton: false, requestRenderMode: true });
+      viewer.current = v;
+      points.current = v.scene.primitives.add(new C.PointPrimitiveCollection());
+      const provider = new C.UrlTemplateImageryProvider({ url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png", maximumLevel: 19, credit: "© OpenStreetMap contributors" });
+      const layer = v.imageryLayers.addImageryProvider(provider);
+      layer.brightness = 0.55;
+      const removeError = provider.errorEvent.addEventListener(() => setError("Basemap unavailable; telemetry remains available."));
+      const lost = (event: Event) => { event.preventDefault(); setError("WebGL context lost. Reload to restore the globe."); };
+      v.canvas.addEventListener("webglcontextlost", lost);
+      const handler = new C.ScreenSpaceEventHandler(v.canvas);
+      handler.setInputAction((event: { position: import("cesium").Cartesian2 }) => {
+        const picked: unknown = v.scene.pick(event.position);
+        if (picked && typeof picked === "object" && "id" in picked && typeof picked.id === "string") {
+          const entity = useIntelligenceStore.getState().entities.find(e => `${e.domain}:${e.entityId || e.id}` === picked.id);
+          if (entity) { useIntelligenceStore.setState({ selectedEntity: entity }); select.current?.(entity); }
         }
-
-        // Tactical space styling
-        viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#06090e");
-        viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#06090e");
-        if (viewer.scene.skyAtmosphere) {
-          viewer.scene.skyAtmosphere.show = true;
-        }
-
-        // Hide default Cesium credit container
-        if (viewer.cesiumWidget?.creditContainer) {
-          viewer.cesiumWidget.creditContainer.style.display = "none";
-        }
-
-        // Camera focus: Strait of Hormuz tactical theater
-        viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(56.25, 26.55, 1400000.0),
-          duration: 1.5,
-        });
-
-        viewerRef.current = viewer;
-        setCesiumReady(true);
-      } catch (err) {
-        console.warn("Cesium WebGL initialization error:", err);
-      }
-    }
-
-    initCesium();
-
-    return () => {
-      isMounted = false;
-      if (viewer && !viewer.isDestroyed()) {
-        viewer.destroy();
-      }
-    };
+      }, C.ScreenSpaceEventType.LEFT_CLICK);
+      v.camera.setView({ destination: C.Cartesian3.fromDegrees(56, 26, 4000000) });
+      cleanup = () => { removeError(); handler.destroy(); v.canvas.removeEventListener("webglcontextlost", lost); if (!v.isDestroyed()) v.destroy(); viewer.current = null; points.current = null; };
+      setReady(true);
+    }).catch((error: unknown) => { console.error("Cesium initialization failed",error); setError(error instanceof Error ? error.message : "Unable to initialize WebGL globe."); });
+    return () => { disposed = true; cleanup(); };
   }, []);
-
-  // Poll and render live entities
   useEffect(() => {
-    if (!cesiumReady || !viewerRef.current) return;
-
-    let timer: NodeJS.Timeout;
-
-    async function updateGlobeEntities() {
-      try {
-        // @ts-expect-error window global
-        const Cesium = (typeof window !== "undefined" && window.Cesium) ? window.Cesium : await import("cesium");
-        const viewer = viewerRef.current;
-        if (!viewer || viewer.isDestroyed()) return;
-
-        // 1. Aviation
-        if (layers.aviation) {
-          const res = await fetch("/api/live/aviation");
-          if (res.ok) {
-            const data = await res.json();
-            const flights = data.items || [];
-            setEntityCounts((prev) => ({ ...prev, flights: flights.length }));
-
-            for (const f of flights.slice(0, 300)) {
-              if (f.lat === undefined || f.lon === undefined) continue;
-              const entityId = `flight-${f.entityId}`;
-              let entity = viewer.entities.getById(entityId);
-
-              const position = Cesium.Cartesian3.fromDegrees(
-                f.lon,
-                f.lat,
-                Math.max(1000, f.alt || 5000)
-              );
-
-              const isMil = f.data.isMilitary;
-              const isEmerg = f.data.isEmergency;
-              const color = isEmerg
-                ? Cesium.Color.RED
-                : isMil
-                ? Cesium.Color.fromCssColorString("#f59e0b")
-                : Cesium.Color.fromCssColorString("#06b6d4");
-
-              if (!entity) {
-                viewer.entities.add({
-                  id: entityId,
-                  name: f.data?.callsign || f.entityId,
-                  position,
-                  point: {
-                    pixelSize: isMil || isEmerg ? 8 : 6,
-                    color,
-                    outlineColor: Cesium.Color.BLACK,
-                    outlineWidth: 1,
-                  },
-                  label: {
-                    text: f.data?.callsign || f.entityId,
-                    font: "10px monospace",
-                    fillColor: color,
-                    pixelOffset: new Cesium.Cartesian2(0, -12),
-                    showBackground: true,
-                    backgroundColor: Cesium.Color.BLACK.withAlpha(0.7),
-                  },
-                  description: `${f.data?.callsign || f.entityId} (${f.data?.type || "Aircraft"})\nAlt: ${f.alt} m`,
-                });
-              } else {
-                entity.position = position;
-              }
-            }
-          }
-        }
-
-        // 2. Maritime
-        if (layers.maritime) {
-          const res = await fetch("/api/live/maritime");
-          if (res.ok) {
-            const data = await res.json();
-            const vessels = data.items || [];
-            setEntityCounts((prev) => ({ ...prev, vessels: vessels.length }));
-
-            for (const v of vessels.slice(0, 200)) {
-              if (v.lat === undefined || v.lon === undefined) continue;
-              const entityId = `vessel-${v.entityId}`;
-              let entity = viewer.entities.getById(entityId);
-
-              const position = Cesium.Cartesian3.fromDegrees(v.lon, v.lat, 0);
-              const isChokepoint = v.source === "static_intelligence";
-              const color = isChokepoint
-                ? Cesium.Color.fromCssColorString("#ef4444")
-                : Cesium.Color.fromCssColorString("#3b82f6");
-
-              if (!entity) {
-                viewer.entities.add({
-                  id: entityId,
-                  name: v.data?.name || v.entityId,
-                  position,
-                  point: {
-                    pixelSize: isChokepoint ? 9 : 6,
-                    color,
-                    outlineColor: Cesium.Color.BLACK,
-                    outlineWidth: 1,
-                  },
-                  label: {
-                    text: v.data?.name || v.entityId,
-                    font: "10px monospace",
-                    fillColor: color,
-                    pixelOffset: new Cesium.Cartesian2(0, 12),
-                    showBackground: true,
-                    backgroundColor: Cesium.Color.BLACK.withAlpha(0.7),
-                  },
-                });
-              }
-            }
-          }
-        }
-
-        // 3. Electronic Warfare / GPS Jamming
-        if (layers.gpsjam) {
-          const res = await fetch("/api/live/gpsjam");
-          if (res.ok) {
-            const data = await res.json();
-            const hexes = data.items || [];
-            setEntityCounts((prev) => ({ ...prev, jammingHexes: hexes.length }));
-
-            for (const h of hexes.slice(0, 150)) {
-              if (h.lat === undefined || h.lon === undefined) continue;
-              const entityId = `jam-${h.data?.hex || h.id}`;
-              if (!viewer.entities.getById(entityId)) {
-                const isHigh = h.data?.severity === "high";
-                viewer.entities.add({
-                  id: entityId,
-                  name: `GPS Jamming Hex ${h.data?.hex || h.id}`,
-                  position: Cesium.Cartesian3.fromDegrees(h.lon, h.lat, 0),
-                  ellipse: {
-                    semiMinorAxis: 35000.0,
-                    semiMajorAxis: 35000.0,
-                    material: isHigh
-                      ? Cesium.Color.RED.withAlpha(0.4)
-                      : Cesium.Color.YELLOW.withAlpha(0.3),
-                    outline: true,
-                    outlineColor: isHigh ? Cesium.Color.RED : Cesium.Color.YELLOW,
-                    outlineWidth: 2,
-                  },
-                  label: {
-                    text: `EW SPOOF ${(h.data?.jammingRatio * 100).toFixed(0)}%`,
-                    font: "10px monospace",
-                    fillColor: Cesium.Color.YELLOW,
-                    pixelOffset: new Cesium.Cartesian2(0, -10),
-                    showBackground: true,
-                    backgroundColor: Cesium.Color.BLACK.withAlpha(0.7),
-                  },
-                });
-              }
-            }
-          }
-        }
-      } catch (err) {
-        console.warn("Globe entities render error:", err);
+    let cancelled=false, frame=0;
+    let unsubscribe=()=>{};
+    void loadCesium().then(C=>{
+      const v=viewer.current, collection=points.current;
+      if(cancelled || !ready || !v || v.isDestroyed() || !collection)return;
+      collection.removeAll();
+      const groups=new Map<string,Telemetry[]>();
+      for(const e of entities){
+        if(!layers[e.domain] || typeof e.lat!=="number" || typeof e.lon!=="number" || !Number.isFinite(e.lat) || !Number.isFinite(e.lon) || Math.abs(e.lat)>90 || Math.abs(e.lon)>180)continue;
+        const key=e.domain+":"+(e.entityId || e.id);const samples=groups.get(key)||[];samples.push(e);groups.set(key,samples);
       }
-    }
-
-    updateGlobeEntities();
-    timer = setInterval(updateGlobeEntities, 15000);
-
-    return () => clearInterval(timer);
-  }, [cesiumReady, layers]);
-
-  return (
-    <div className="relative flex-1 h-full w-full overflow-hidden bg-[#06090e]">
-      {/* 3D WebGL Canvas Container */}
-      <div ref={containerRef} className="absolute inset-0 h-full w-full" />
-
-      {/* Layer Toggles Floating Overlay */}
-      <div className="absolute top-4 left-4 z-20 flex flex-col space-y-1.5 p-2 rounded bg-slate-950/80 backdrop-blur-md border border-slate-800 text-xs font-mono-hud text-slate-200">
-        <div className="flex items-center space-x-1.5 pb-1 border-b border-slate-800 text-slate-400 font-bold uppercase text-[10px]">
-          <Layers className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Active Layers</span>
-        </div>
-
-        <button
-          onClick={() => setLayers((l) => ({ ...l, aviation: !l.aviation }))}
-          className={`flex items-center justify-between space-x-3 px-2 py-1 rounded transition-colors ${
-            layers.aviation ? "bg-cyan-950/60 text-cyan-300 border border-cyan-800/60" : "text-slate-500 hover:text-slate-300"
-          }`}
-        >
-          <div className="flex items-center space-x-1.5">
-            <Plane className="w-3 h-3" />
-            <span>Aviation ({entityCounts.flights})</span>
-          </div>
-          {layers.aviation ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-        </button>
-
-        <button
-          onClick={() => setLayers((l) => ({ ...l, maritime: !l.maritime }))}
-          className={`flex items-center justify-between space-x-3 px-2 py-1 rounded transition-colors ${
-            layers.maritime ? "bg-blue-950/60 text-blue-300 border border-blue-800/60" : "text-slate-500 hover:text-slate-300"
-          }`}
-        >
-          <div className="flex items-center space-x-1.5">
-            <Anchor className="w-3 h-3" />
-            <span>Maritime ({entityCounts.vessels})</span>
-          </div>
-          {layers.maritime ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-        </button>
-
-        <button
-          onClick={() => setLayers((l) => ({ ...l, gpsjam: !l.gpsjam }))}
-          className={`flex items-center justify-between space-x-3 px-2 py-1 rounded transition-colors ${
-            layers.gpsjam ? "bg-amber-950/60 text-amber-300 border border-amber-800/60" : "text-slate-500 hover:text-slate-300"
-          }`}
-        >
-          <div className="flex items-center space-x-1.5">
-            <Zap className="w-3 h-3" />
-            <span>GPS Jamming ({entityCounts.jammingHexes})</span>
-          </div>
-          {layers.gpsjam ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-        </button>
-      </div>
-
-      {/* 72-Hour Temporal Scrubber Floating Bar */}
-      <div className="absolute bottom-4 inset-x-8 lg:inset-x-24 z-20 p-2.5 rounded bg-slate-950/85 backdrop-blur-md border border-slate-800 flex items-center space-x-4 font-mono-hud text-xs text-slate-200">
-        <span className="text-[10px] text-cyan-400 font-bold uppercase whitespace-nowrap">
-          72H REPLAY SCRUBBER:
-        </span>
-        <input
-          type="range"
-          min="-72"
-          max="0"
-          step="1"
-          value={replayHour}
-          onChange={(e) => setReplayHour(parseInt(e.target.value, 10))}
-          className="flex-1 accent-cyan-400 h-1.5 bg-slate-800 rounded appearance-none cursor-pointer"
-        />
-        <span
-          className={`font-bold text-xs px-2 py-0.5 rounded whitespace-nowrap ${
-            replayHour === 0
-              ? "bg-emerald-950 text-emerald-300 border border-emerald-700"
-              : "bg-amber-950 text-amber-300 border border-amber-700"
-          }`}
-        >
-          {replayHour === 0 ? "LIVE (T-0)" : `T${replayHour} HOURS`}
-        </span>
-      </div>
+      const tracks=[...groups].map(([id,samples])=>{
+        samples.sort((a,b)=>a.timestamp-b.timestamp);const e=samples[samples.length-1];
+        return {samples,point:collection.add({id,show:false,pixelSize:e.domain==="gpsjam"?12:6,color:C.Color.fromCssColorString(e.data.isEmergency?"#ff3333":({aviation:"#22d3ee",maritime:"#60a5fa",gpsjam:"#fbbf24",satellite:"#c084fc",seismic:"#fb7185",thermal:"#f97316"}[e.domain]||"#ffffff"))})};
+      });
+      let anchor=performance.now();
+      const draw=()=>{
+        const state=useIntelligenceStore.getState();
+        const time=state.replayTime===null?null:Math.min(state.replayTime+(state.playing?(performance.now()-anchor)*state.speed:0),(state.replayStart ?? state.replayTime)+3599999);
+        for(const {samples,point} of tracks){const position=positionAt(samples,time);point.show=position!==null;if(position)point.position=C.Cartesian3.fromDegrees(position.lon,position.lat,position.alt);}
+        v.scene.requestRender();
+      };
+      unsubscribe=useIntelligenceStore.subscribe((state,previous)=>{if(state.replayTime!==previous.replayTime || state.playing!==previous.playing || state.speed!==previous.speed){anchor=performance.now();draw();}});
+      const animate=()=>{if(cancelled || v.isDestroyed())return;if(useIntelligenceStore.getState().playing)draw();frame=requestAnimationFrame(animate);};
+      draw();animate();
+    });
+    return ()=>{cancelled=true;cancelAnimationFrame(frame);unsubscribe();};
+  },[entities,layers,ready]);
+  return <div className="relative flex-1 min-h-0 bg-slate-950">
+    <div ref={container} className="absolute inset-0" />
+    <div className="absolute top-3 left-3 bg-slate-950/90 p-3 text-xs space-y-2">{Object.entries(layers).map(([domain, visible]) => <label key={domain} className="block"><input type="checkbox" checked={visible} onChange={() => setLayers(l => ({ ...l, [domain]: !visible }))} /> {domain.toUpperCase()}</label>)}</div>
+    {error && <div role="status" className="absolute top-3 right-3 text-amber-300 bg-slate-950 p-2 text-xs">{error}</div>}
+    {replayTime !== null && <div className="absolute top-16 right-3 text-amber-300 bg-slate-950/90 p-2 text-xs">TEMPORAL REPLAY · {new Date(replayTime).toISOString()} {entities.length === 0 ? "· No recorded observations" : ""}</div>}
+    <div className="absolute bottom-3 left-3 right-3 bg-slate-950/90 p-3 flex gap-3 items-center text-xs">
+      <label htmlFor="replay">72H REPLAY</label><input id="replay" aria-label="Replay hours before now" type="range" min="-72" max="0" defaultValue="0" onChange={e => useIntelligenceStore.getState().setReplay(Number(e.target.value))} className="flex-1" />
+      <span>{replayStart === null ? "LIVE" : "REPLAY"}</span>
+      <button disabled={replayStart === null} onClick={() => useIntelligenceStore.setState({ playing: !playing })}>{playing ? "Pause" : "Play"}</button>
+      <select aria-label="Playback speed" value={speed} onChange={e => useIntelligenceStore.setState({ speed: Number(e.target.value) })}>{[1, 5, 20].map(s => <option key={s} value={s}>{s}x</option>)}</select>
     </div>
-  );
+  </div>;
 };

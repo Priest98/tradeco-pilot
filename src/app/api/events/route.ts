@@ -13,7 +13,7 @@ export async function GET() {
       LIMIT 50
     `);
 
-    const rows = stmt.all() as any[];
+    const rows = stmt.all() as Array<{id:string;title:string;bluf:string;threatLevel:string;primaryDomain:string;locationName:string;lat:number|null;lon:number|null;createdAt:number;updatedAt:number;dossierJson:string}>;
     const events = rows.map((r) => ({
       id: r.id,
       title: r.title,
@@ -32,9 +32,9 @@ export async function GET() {
       count: events.length,
       events,
     });
-  } catch (err: any) {
+  } catch (err) {
     return NextResponse.json(
-      { error: "Failed to fetch events", message: err.message },
+      { error: "Failed to fetch events" },
       { status: 500 }
     );
   }

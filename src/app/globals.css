@@ -73,7 +73,5 @@
   animation: radar-pulse 2s infinite;
 }
 
-/* Hide default Cesium bottom widget to prevent HUD overlap */
-.cesium-viewer-bottom {
-  display: none !important;
-}
+/* Keep imagery attribution visible above the replay controls. */
+.cesium-viewer-bottom { bottom: 64px !important; }

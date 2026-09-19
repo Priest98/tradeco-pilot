@@ -96,3 +96,8 @@ CREATE TABLE IF NOT EXISTS rate_limits (
     count INTEGER NOT NULL,
     reset_at INTEGER NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_obs_time ON observations(timestamp);
+CREATE INDEX IF NOT EXISTS idx_anomalies_status_z ON anomalies(status, z_score DESC, timestamp DESC);
+
+CREATE TABLE IF NOT EXISTS daily_briefings (id TEXT PRIMARY KEY, generated_at INTEGER NOT NULL, markdown TEXT NOT NULL);

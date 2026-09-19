@@ -9,7 +9,7 @@ export interface NormalizedObservation {
   lon?: number;
   alt?: number;
   timestamp: number;
-  data: Record<string, any>;
+  data: Record<string, unknown>;
 }
 
 export interface IngestorHealth {
@@ -61,6 +61,8 @@ export abstract class BaseIngestor {
       console.log(`[Ingestor:${this.name}] Cooldown elapsed. Probing upstream service...`);
     }
 
+    if (this.lastSuccessTimestamp && now - this.lastSuccessTimestamp < this.pollIntervalMs) return [];
+
     if (this.isRunning) {
       return [];
     }
@@ -70,19 +72,18 @@ export abstract class BaseIngestor {
 
     try {
       const observations = await this.fetchData();
+      if (observations.length > 0) this.saveObservations(observations);
       this.consecutiveFailures = 0;
       this.lastSuccessTimestamp = Date.now();
       this.lastError = undefined;
       this.itemsIngestedTotal += observations.length;
 
-      if (observations.length > 0) {
-        this.saveObservations(observations);
-      }
+
 
       return observations;
-    } catch (err: any) {
+    } catch (err) {
       this.consecutiveFailures++;
-      this.lastError = err.message || String(err);
+      this.lastError = err instanceof Error ? err.message : "Ingestion failed";
       console.error(`[Ingestor:${this.name}] Poll failed (${this.consecutiveFailures}/${this.circuitBreakerThreshold}):`, this.lastError);
       return [];
     } finally {
@@ -103,10 +104,10 @@ export abstract class BaseIngestor {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      db.exec("BEGIN TRANSACTION;");
+      db.exec("BEGIN IMMEDIATE;");
       for (const obs of observations) {
         insertStmt.run(
-          obs.id,
+          `${obs.id}@${obs.timestamp}`,
           obs.domain,
           obs.source,
           obs.entityId || null,
@@ -123,7 +124,7 @@ export abstract class BaseIngestor {
         const db = getDatabase();
         db.exec("ROLLBACK;");
       } catch {}
-      console.error(`[Ingestor:${this.name}] SQLite batch insert failed:`, err);
+      throw err;
     }
   }
 

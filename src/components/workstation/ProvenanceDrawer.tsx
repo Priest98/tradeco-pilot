@@ -24,10 +24,11 @@ export const ProvenanceDrawer: React.FC<ProvenanceDrawerProps> = ({ dossier, onC
             PROVENANCE DOSSIER // ASK WHY
           </h3>
           <span className="text-[10px] font-mono-hud px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
-            STAGE 1-7
+            AI ASSESSMENT
           </span>
         </div>
         <button
+          aria-label="Close provenance drawer"
           onClick={onClose}
           className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-slate-200 transition-colors"
         >
@@ -162,7 +163,7 @@ export const ProvenanceDrawer: React.FC<ProvenanceDrawerProps> = ({ dossier, onC
           <section className="p-3 rounded bg-slate-900/80 border border-slate-800 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-mono-hud font-bold text-slate-400 uppercase">
-                Calibrated Forecast Ledger
+                Forecast Estimate (Unvalidated)
               </span>
               <span className="font-mono-hud text-cyan-300 text-xs font-bold">
                 P = {(dossier.forecast.probability * 100).toFixed(0)}%

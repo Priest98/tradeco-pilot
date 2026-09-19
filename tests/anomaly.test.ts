@@ -33,7 +33,8 @@ describe("Deterministic Anomaly Engine Tests", () => {
     const anomalies = engine.evaluateBatch(obs);
     expect(anomalies.length).toBeGreaterThan(0);
     expect(anomalies[0].anomalyType).toBe("emergency_squawk");
-    expect(anomalies[0].zScore).toBe(5.0);
+    expect(anomalies[0].zScore).toBe(0);
+    expect(anomalies[0].evidence.ruleTriggered).toBe(true);
   });
 
   it("should detect military flight clustering when >= 3 military aircraft converge", () => {
@@ -76,6 +77,7 @@ describe("Deterministic Anomaly Engine Tests", () => {
     const anomalies = engine.evaluateBatch(obs);
     const cluster = anomalies.find((a) => a.anomalyType === "military_cluster");
     expect(cluster).toBeDefined();
-    expect(cluster!.zScore).toBeGreaterThanOrEqual(2.5);
+    expect(cluster!.zScore).toBe(0);
+    expect(cluster!.evidence.baseline).toMatchObject({status:"insufficient_history"});
   });
 });

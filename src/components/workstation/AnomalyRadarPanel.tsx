@@ -13,7 +13,7 @@ export interface AnomalyItem {
   lat?: number;
   lon?: number;
   summary: string;
-  evidence: Record<string, any>;
+  evidence: Record<string, unknown>;
   status: string;
 }
 
@@ -54,7 +54,7 @@ export const AnomalyRadarPanel: React.FC<AnomalyRadarProps> = ({
           </h2>
         </div>
         <span className="text-[10px] font-mono-hud bg-slate-900 border border-slate-800 px-2 py-0.5 rounded text-amber-300">
-          Z &gt; 2.0
+          RULES + STATISTICS
         </span>
       </div>
 
@@ -62,7 +62,7 @@ export const AnomalyRadarPanel: React.FC<AnomalyRadarProps> = ({
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
         {anomalies.length === 0 ? (
           <div className="p-8 text-center text-slate-500 text-xs font-mono-hud">
-            No statistical anomalies exceeding Z &gt; 2.0 threshold. Airspace & maritime baselines nominal.
+            No recorded anomalies. Feed coverage and baseline history may be incomplete.
           </div>
         ) : (
           anomalies.map((a) => {
@@ -87,7 +87,7 @@ export const AnomalyRadarPanel: React.FC<AnomalyRadarProps> = ({
                         : "bg-amber-950 text-amber-300 border border-amber-800"
                     }`}
                   >
-                    Z={a.zScore.toFixed(1)}
+                    {a.zScore === 0 ? "RULE / Z unavailable" : `Z=${a.zScore.toFixed(1)}`}
                   </span>
                 </div>
 

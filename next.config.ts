@@ -5,7 +5,8 @@ const nextConfig: NextConfig = {
   productionBrowserSourceMaps: false,
 
   // Server external packages
-  serverExternalPackages: ["@google/generative-ai"],
+  serverExternalPackages: ["@google/generative-ai", "undici"],
+  outputFileTracingIncludes: { "/*": ["./src/server/db/schema.sql"] },
 
   // Allow Cesium assets and workers from public/cesium
   async headers() {

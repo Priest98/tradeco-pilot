@@ -64,7 +64,7 @@ export class GpsJammingIngestor extends BaseIngestor {
 
     const observations: NormalizedObservation[] = [];
 
-    for (const row of records as any[]) {
+    for (const row of records as Array<Record<string, string>>) {
       const hex = row.hex;
       if (!hex) continue;
 
